@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.env
+deploy/selfhost/.env
+deploy/selfhost/data/
