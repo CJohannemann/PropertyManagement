@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createLease, UTILITY_NAMES } from '../lib/leases'
 import { fetchStateRegulation, type StateRegulation } from '../lib/regulations'
+import { proratedFirstPeriod, oneYearTerm } from '../lib/leaseDates'
 
 type Props = {
   unitId: string
@@ -8,24 +9,6 @@ type Props = {
   stateCode: string
   onCreated: () => void
   onCancel: () => void
-}
-
-/**
- * The end date of a standard 12-month term: a lease starting 2026-09-01
- * runs through 2027-08-31, not 2027-09-01 — the last day of the twelfth
- * month, not the first day of the thirteenth.
- *
- * Built in UTC and from the date's own parts rather than by parsing the
- * string as local time, which shifts the day backwards for anyone west of
- * UTC and would quietly hand them a lease ending a day early. A start of
- * Feb 29 lands on Feb 28 the following year, which is the right answer.
- */
-function oneYearTerm(startIso: string): string {
-  const [y, m, d] = startIso.split('-').map(Number)
-  if (!y || !m || !d) return ''
-  const end = new Date(Date.UTC(y + 1, m - 1, d))
-  end.setUTCDate(end.getUTCDate() - 1)
-  return end.toISOString().slice(0, 10)
 }
 
 export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
@@ -45,6 +28,7 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
   const [nonrefundableFee, setNonrefundableFee] = useState('')
   const [nonrefundableFeeLabel, setNonrefundableFeeLabel] = useState('')
   const [proratedRent, setProratedRent] = useState('')
+  const [proratedEdited, setProratedEdited] = useState(false)
   const [nsfFee, setNsfFee] = useState('')
   const [lateFeeAutoApply, setLateFeeAutoApply] = useState(false)
   const [lateFeeType, setLateFeeType] = useState<'percent' | 'flat'>('percent')
@@ -86,6 +70,27 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
 
   const verified = reg !== 'loading' && reg !== null
   const tenantFeeAllowed = verified && reg.tenant_paid_processing_fee_allowed === true
+
+  const suggestedProration = proratedFirstPeriod(
+    startDate, Number(rentDueDay), Number(rentAmount),
+  )
+
+  // Fills in the calculated figure until the landlord types their own, at
+  // which point it stops moving under them — the same rule as the end
+  // date. Runs on every relevant change rather than once, since editing
+  // the rent or the due day changes the right answer.
+  useEffect(() => {
+    if (proratedEdited) return
+    setProratedRent(
+      suggestedProration === null || suggestedProration === 0
+        ? ''
+        : String(suggestedProration),
+    )
+  }, [suggestedProration, proratedEdited])
+
+  const daysOwedLabel = suggestedProration === null || suggestedProration === 0
+    ? ''
+    : `Calculated from a ${startDate} start`
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -185,9 +190,14 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
         <div className="field">
           <label htmlFor="l-prorated">Prorated first month ($)</label>
           <input id="l-prorated" type="number" min="0" step="0.01" value={proratedRent}
-            onChange={(e) => setProratedRent(e.target.value)} />
+            onChange={(e) => { setProratedEdited(true); setProratedRent(e.target.value) }} />
           <span className="muted">
-            For a term starting mid-month. Billed once, dated the start date.
+            {suggestedProration === null
+              ? 'Fill in the start date, rent and due day and this is worked out for you.'
+              : suggestedProration === 0
+                ? 'The term starts on the rent due day, so no proration is needed.'
+                : `${daysOwedLabel} — calculated as rent × days ÷ days in the period. ` +
+                  'Edit it if your lease rounds or uses another method.'}
           </span>
         </div>
 
