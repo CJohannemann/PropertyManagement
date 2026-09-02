@@ -4,12 +4,14 @@ import {
   AVAILABLE_PLACEHOLDERS, type TemplateWithClauses,
 } from '../lib/leaseTemplates'
 import { STARTER_CLAUSES } from '../lib/starterClauses'
+import { splitIntoClauses } from '../lib/splitClauses'
 
 type Props = { organizationId: string; onBack: () => void }
 
 export function LeaseTemplates({ organizationId, onBack }: Props) {
   const [template, setTemplate] = useState<TemplateWithClauses | null | 'loading'>('loading')
   const [error, setError] = useState<string | null>(null)
+  const [pasting, setPasting] = useState(false)
   const [busy, setBusy] = useState(false)
 
   async function load() {
@@ -23,20 +25,35 @@ export function LeaseTemplates({ organizationId, onBack }: Props) {
 
   useEffect(() => { load() }, [organizationId])
 
-  async function start(from: 'sample' | 'blank') {
-    setBusy(true)
-    setError(null)
+  async function generate() {
+    setBusy(true); setError(null)
     try {
       await createTemplate(
         organizationId,
-        from === 'sample' ? 'Residential lease' : 'My lease',
-        from === 'sample'
-          ? STARTER_CLAUSES.map((c) => ({
-              heading: c.heading, body: c.body, omit_if_empty: c.omitIfEmpty ?? [],
-            }))
-          : [{ heading: 'Agreement', body: 'Paste your lease here.' }],
+        'Residential lease',
+        STARTER_CLAUSES.map((c) => ({
+          heading: c.heading, body: c.body, omit_if_empty: c.omitIfEmpty ?? [],
+        })),
         true,
       )
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+    setBusy(false)
+  }
+
+  async function importPasted(text: string) {
+    setBusy(true); setError(null)
+    try {
+      const clauses = splitIntoClauses(text)
+      await createTemplate(
+        organizationId,
+        'My lease',
+        clauses.length ? clauses : [{ heading: 'Agreement', body: text }],
+        true,
+      )
+      setPasting(false)
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -51,38 +68,46 @@ export function LeaseTemplates({ organizationId, onBack }: Props) {
       <div>
         <button className="link" onClick={onBack}>← Back</button>
         <h2>Lease template</h2>
-        {error && <p className="error-text">{error}</p>}
         <p className="muted">
-          Your lease wording lives here. The app fills in the figures — rent,
-          dates, deposits, late fees — but the clauses themselves are your
-          document, because requirements differ by state and a lease is
-          something you and your attorney are responsible for.
+          The app fills in the figures — rent, dates, deposits, late fees —
+          but the wording is your document. Requirements differ by state,
+          and a lease is something you and your attorney are responsible
+          for, so it isn't something the app can supply on your behalf.
         </p>
-        <div className="card-list">
-          <div>
-            <strong>Paste in the lease you already use</strong>
-            <p className="muted">
-              Start with a single clause you can paste your existing
-              agreement into, then split it up if you want the figures
-              filled in automatically.
-            </p>
-            <button className="primary" disabled={busy} onClick={() => start('blank')}>
-              Start from blank
-            </button>
+        {error && <p className="error-text">{error}</p>}
+
+        {pasting ? (
+          <PasteLease busy={busy} onImport={importPasted} onCancel={() => setPasting(false)} />
+        ) : (
+          <div className="card-list">
+            <div>
+              <strong>Use the lease you already have</strong>
+              <p className="muted">
+                Paste it in and it's split into clauses automatically, so
+                each part can be edited on its own. Works from Word, Google
+                Docs, or a PDF — copy the text, not the file.
+              </p>
+              <button className="primary" disabled={busy} onClick={() => setPasting(true)}>
+                Paste my lease
+              </button>
+            </div>
+
+            <div>
+              <strong>Generate one to start from</strong>
+              <p className="muted">
+                A {STARTER_CLAUSES.length}-clause residential lease covering
+                the usual ground — term, rent, deposits, utilities,
+                maintenance, access, notices. Adapted from a Kentucky lease,
+                so treat it as a skeleton to edit rather than something to
+                use as-is, and have your attorney read it before anyone
+                signs. It may be wrong for your state.
+              </p>
+              <button className="primary" disabled={busy} onClick={generate}>
+                Generate a starter lease
+              </button>
+            </div>
           </div>
-          <div>
-            <strong>Start from a sample and edit it</strong>
-            <p className="muted">
-              A ~30 clause residential lease skeleton, adapted from a
-              Kentucky lease. It is a starting point, not advice — it may be
-              wrong for your state, and needs your attorney's review before
-              you sign anyone to it.
-            </p>
-            <button className="primary" disabled={busy} onClick={() => start('sample')}>
-              Start from sample
-            </button>
-          </div>
-        </div>
+        )}
       </div>
     )
   }
@@ -92,7 +117,7 @@ export function LeaseTemplates({ organizationId, onBack }: Props) {
       <button className="link" onClick={onBack}>← Back</button>
       <h2>{template.name}</h2>
       <p className="muted">
-        {'Use {braces} to insert lease figures: '}
+        {'Insert lease figures with {braces}: '}
         {AVAILABLE_PLACEHOLDERS.map((p) => `{${p}}`).join(', ')}
       </p>
       {error && <p className="error-text">{error}</p>}
@@ -113,6 +138,45 @@ export function LeaseTemplates({ organizationId, onBack }: Props) {
       }}>
         + Add clause
       </button>
+    </div>
+  )
+}
+
+function PasteLease({
+  busy, onImport, onCancel,
+}: { busy: boolean; onImport: (t: string) => void; onCancel: () => void }) {
+  const [text, setText] = useState('')
+  // Shown before importing, so it's obvious the split is a guess that can
+  // be corrected rather than something that happened to the document.
+  const preview = text.trim() ? splitIntoClauses(text) : []
+
+  return (
+    <div className="card-list">
+      <div>
+        <h3 style={{ marginTop: 0 }}>Paste your lease</h3>
+        <div className="field">
+          <textarea rows={14} value={text} onChange={(e) => setText(e.target.value)}
+            placeholder="Paste the full text of your lease agreement here…" />
+        </div>
+
+        {preview.length > 0 && (
+          <p className="muted">
+            Found {preview.length} clause{preview.length === 1 ? '' : 's'}:{' '}
+            {preview.slice(0, 6).map((c) => c.heading).join(', ')}
+            {preview.length > 6 ? ', …' : ''}. You can edit, merge or delete
+            any of them afterwards.
+          </p>
+        )}
+
+        <button className="primary" disabled={busy || text.trim() === ''}
+          onClick={() => onImport(text)}>
+          {busy ? 'Importing…' : 'Import this lease'}
+        </button>
+        <button className="link" type="button" onClick={onCancel}
+          style={{ marginTop: '0.5rem' }}>
+          Cancel
+        </button>
+      </div>
     </div>
   )
 }

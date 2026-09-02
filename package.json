@@ -8,9 +8,10 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "verify": "npm run verify:proration && npm run verify:db",
+    "verify": "npm run verify:proration && npm run verify:split && npm run verify:db",
     "verify:db": "node db/test/run.mjs",
-    "verify:proration": "node --experimental-strip-types db/test/proration-parity.mjs"
+    "verify:proration": "node --experimental-strip-types db/test/proration-parity.mjs",
+    "verify:split": "node --experimental-strip-types db/test/split-clauses.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
