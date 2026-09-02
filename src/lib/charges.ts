@@ -1,13 +1,42 @@
 import { supabase } from './supabase'
 
+export type ChargeType =
+  | 'rent'
+  | 'late_fee'
+  | 'prorated_rent'
+  | 'security_deposit'
+  | 'pet_deposit'
+  | 'other_deposit'
+  | 'nonrefundable_fee'
+  | 'nsf_fee'
+  | 'other'
+
 export type Charge = {
   id: string
   lease_id: string
-  charge_type: 'rent' | 'late_fee' | 'other'
+  charge_type: ChargeType
   due_date: string
   amount: number
   amount_paid: number
   status: 'pending' | 'partial' | 'paid' | 'late'
+}
+
+const CHARGE_LABELS: Record<ChargeType, string> = {
+  rent: 'Rent',
+  late_fee: 'Late fee',
+  prorated_rent: 'Prorated rent',
+  security_deposit: 'Security deposit',
+  pet_deposit: 'Pet deposit',
+  other_deposit: 'Deposit',
+  nonrefundable_fee: 'Non-refundable fee',
+  nsf_fee: 'Returned payment fee',
+  other: 'Other charge',
+}
+
+/** Falls back to the raw type so a charge type added in SQL but not here
+ *  still shows something recognisable rather than blank. */
+export function chargeLabel(t: ChargeType): string {
+  return CHARGE_LABELS[t] ?? t
 }
 
 /** A charge with enough context to say which unit of which property it belongs to. */

@@ -42,10 +42,11 @@ export const LEASE_CLAUSES: LeaseClause[] = [
       'month. {lateFeeClause}',
   },
   {
-    heading: 'Security Deposit',
+    heading: 'Deposits and Fees',
     body:
-      'Tenant shall pay a security deposit of {depositAmount}, to be held and returned in ' +
-      'accordance with applicable state law.',
+      'The amounts shown under "Due at signing" above are payable upon execution of this ' +
+      'Agreement. Deposits are refundable in accordance with applicable law, less any ' +
+      'amounts lawfully withheld; any amount identified as non-refundable is not returnable.',
   },
   {
     heading: 'Payment of Rent',

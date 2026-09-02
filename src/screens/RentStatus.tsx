@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  fetchCharges, outstanding, totalOutstanding, isOverdue, money,
+  fetchCharges, outstanding, totalOutstanding, isOverdue, money, chargeLabel,
   type ChargeWithPlace,
 } from '../lib/charges'
 
@@ -62,7 +62,7 @@ export function RentStatus() {
                 </span>
               </div>
               <div className="muted">
-                {c.charge_type === 'late_fee' ? 'Late fee' : c.charge_type === 'other' ? 'Other' : 'Rent'}
+                {chargeLabel(c.charge_type)}
                 {' due '}{c.due_date} · {money(Number(c.amount))}
                 {Number(c.amount_paid) > 0 && ` · ${money(Number(c.amount_paid))} paid`}
                 {outstanding(c) > 0 && ` · ${money(outstanding(c))} outstanding`}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, describeError } from '../../lib/supabase'
 import {
-  fetchCharges, outstanding, totalOutstanding, isOverdue, money,
+  fetchCharges, outstanding, totalOutstanding, isOverdue, money, chargeLabel,
   type ChargeWithPlace,
 } from '../../lib/charges'
 
@@ -79,7 +79,7 @@ export function TenantDashboard() {
             <div key={c.id}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <strong>
-                  {c.charge_type === 'late_fee' ? 'Late fee' : c.charge_type === 'other' ? 'Other charge' : 'Rent'}
+                  {chargeLabel(c.charge_type)}
                 </strong>
                 <span className={isOverdue(c) ? 'error-text' : 'muted'} style={{ margin: 0 }}>
                   {isOverdue(c) ? 'Overdue' : c.status}

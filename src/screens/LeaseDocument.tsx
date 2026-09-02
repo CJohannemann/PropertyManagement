@@ -59,14 +59,55 @@ export function LeaseDocument({
   // prompt to fill it in, where a stray address looks deliberate.
   const tenantNames = named.length > 0 ? named.join(' and ') : '________________________'
 
-  const lateFeeClause = lease.late_fee_auto_apply && lease.late_fee_amount != null
-    ? `If rent is not received within ${lease.late_fee_grace_days ?? 0} day(s) of the due date, ` +
-      `a late fee of ${
+  const lateFeeParts: string[] = []
+  if (lease.late_fee_auto_apply && lease.late_fee_amount != null) {
+    lateFeeParts.push(
+      `If rent is not received within ${lease.late_fee_grace_days ?? 0} day(s) of the due ` +
+      `date, a late fee of ${
         lease.late_fee_type === 'percent'
           ? `${lease.late_fee_amount}% of the monthly rent`
           : money(Number(lease.late_fee_amount))
-      } shall be applied.`
+      } shall be applied.`,
+    )
+  }
+  if (lease.late_fee_auto_apply && lease.late_fee_daily_amount != null) {
+    lateFeeParts.push(
+      `An additional late fee of ${money(Number(lease.late_fee_daily_amount))} per day ` +
+      `shall accrue beginning ${lease.late_fee_daily_start_days ?? 0} day(s) after the due ` +
+      `date, until the balance is paid in full.`,
+    )
+  }
+  if (lease.nsf_fee_amount != null) {
+    lateFeeParts.push(
+      `If a payment is returned unpaid by Tenant's bank for any reason, a fee of ` +
+      `${money(Number(lease.nsf_fee_amount))} shall be added to Rent for that month.`,
+    )
+  }
+  const lateFeeClause = lateFeeParts.length
+    ? lateFeeParts.join(' ')
     : 'No automatic late fee applies under this Agreement.'
+
+  // Only the amounts that actually apply appear, so the document never
+  // carries a "Pet Deposit: N/A" line for a lease with no pet.
+  const moneyLines: { label: string; amount: number }[] = []
+  if (lease.prorated_rent_amount != null)
+    moneyLines.push({ label: 'Prorated rent for the partial first month', amount: Number(lease.prorated_rent_amount) })
+  if (Number(lease.deposit_amount) > 0)
+    moneyLines.push({ label: 'Security deposit', amount: Number(lease.deposit_amount) })
+  if (lease.pet_deposit_amount != null)
+    moneyLines.push({ label: 'Pet deposit', amount: Number(lease.pet_deposit_amount) })
+  if (lease.other_deposit_amount != null)
+    moneyLines.push({
+      label: lease.other_deposit_label || 'Other deposit',
+      amount: Number(lease.other_deposit_amount),
+    })
+  if (lease.nonrefundable_fee_amount != null)
+    moneyLines.push({
+      label: `${lease.nonrefundable_fee_label || 'Non-refundable fee'} (non-refundable)`,
+      amount: Number(lease.nonrefundable_fee_amount),
+    })
+
+  const dueAtSigning = moneyLines.reduce((s, l) => s + l.amount, 0)
 
   // The disclosure that has to appear in the lease itself, not only at
   // checkout — an undisclosed surcharge risks reading as a disguised rent
@@ -122,6 +163,26 @@ export function LeaseDocument({
       <article className="lease-doc">
         <h1>Residential Lease Agreement</h1>
         <p className="lease-doc-sub">{propertyName} — {premises}</p>
+
+        {moneyLines.length > 0 && (
+          <section>
+            <h2>Due at signing</h2>
+            <table className="lease-doc-table">
+              <tbody>
+                {moneyLines.map((l) => (
+                  <tr key={l.label}>
+                    <td>{l.label}</td>
+                    <td className="amount">{money(l.amount)}</td>
+                  </tr>
+                ))}
+                <tr className="total">
+                  <td>Total due at signing</td>
+                  <td className="amount">{money(dueAtSigning)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        )}
 
         {LEASE_CLAUSES.map((c, i) => (
           <section key={c.heading}>

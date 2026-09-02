@@ -39,10 +39,19 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
   const [rentAmount, setRentAmount] = useState('')
   const [rentDueDay, setRentDueDay] = useState('1')
   const [depositAmount, setDepositAmount] = useState('')
+  const [petDeposit, setPetDeposit] = useState('')
+  const [otherDeposit, setOtherDeposit] = useState('')
+  const [otherDepositLabel, setOtherDepositLabel] = useState('')
+  const [nonrefundableFee, setNonrefundableFee] = useState('')
+  const [nonrefundableFeeLabel, setNonrefundableFeeLabel] = useState('')
+  const [proratedRent, setProratedRent] = useState('')
+  const [nsfFee, setNsfFee] = useState('')
   const [lateFeeAutoApply, setLateFeeAutoApply] = useState(false)
   const [lateFeeType, setLateFeeType] = useState<'percent' | 'flat'>('percent')
   const [lateFeeAmount, setLateFeeAmount] = useState('')
   const [lateFeeGraceDays, setLateFeeGraceDays] = useState('')
+  const [lateFeeDailyAmount, setLateFeeDailyAmount] = useState('')
+  const [lateFeeDailyStartDays, setLateFeeDailyStartDays] = useState('')
   const [feePayer, setFeePayer] = useState<'landlord' | 'tenant'>('landlord')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -73,6 +82,12 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
     setBusy(true)
     setError(null)
     try {
+      // Empty stays null rather than becoming 0: "no pet deposit agreed"
+      // and "a pet deposit of zero" read the same on screen but the first
+      // should not put a $0 line on the lease document.
+      const num = (s: string) => (s.trim() === '' ? null : Number(s))
+      const text = (s: string) => (s.trim() === '' ? null : s.trim())
+
       await createLease({
         unitId,
         startDate,
@@ -80,10 +95,19 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
         rentAmount: Number(rentAmount),
         rentDueDay: Number(rentDueDay),
         depositAmount: Number(depositAmount || 0),
+        petDepositAmount: num(petDeposit),
+        otherDepositAmount: num(otherDeposit),
+        otherDepositLabel: text(otherDepositLabel),
+        nonrefundableFeeAmount: num(nonrefundableFee),
+        nonrefundableFeeLabel: text(nonrefundableFeeLabel),
+        proratedRentAmount: num(proratedRent),
+        nsfFeeAmount: num(nsfFee),
         lateFeeAutoApply,
         lateFeeType: lateFeeAutoApply ? lateFeeType : null,
-        lateFeeAmount: lateFeeAutoApply && lateFeeAmount ? Number(lateFeeAmount) : null,
-        lateFeeGraceDays: lateFeeGraceDays ? Number(lateFeeGraceDays) : null,
+        lateFeeAmount: lateFeeAutoApply ? num(lateFeeAmount) : null,
+        lateFeeGraceDays: num(lateFeeGraceDays),
+        lateFeeDailyAmount: lateFeeAutoApply ? num(lateFeeDailyAmount) : null,
+        lateFeeDailyStartDays: lateFeeAutoApply ? num(lateFeeDailyStartDays) : null,
         feePayer,
       })
       onCreated()
@@ -137,9 +161,62 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
             onChange={(e) => setRentDueDay(e.target.value)} />
         </div>
         <div className="field">
+          <label htmlFor="l-prorated">Prorated first month ($)</label>
+          <input id="l-prorated" type="number" min="0" step="0.01" value={proratedRent}
+            onChange={(e) => setProratedRent(e.target.value)} />
+          <span className="muted">
+            For a term starting mid-month. Billed once, dated the start date.
+          </span>
+        </div>
+
+        <h4 style={{ margin: '1.5rem 0 0.5rem' }}>Deposits and fees</h4>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Anything entered here is billed once at move-in, alongside the
+          prorated rent. Leave blank if it doesn't apply.
+        </p>
+
+        <div className="field">
           <label htmlFor="l-dep">Security deposit ($)</label>
           <input id="l-dep" type="number" min="0" step="0.01" value={depositAmount}
             onChange={(e) => setDepositAmount(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="l-petdep">Pet deposit ($)</label>
+          <input id="l-petdep" type="number" min="0" step="0.01" value={petDeposit}
+            onChange={(e) => setPetDeposit(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="l-othdep">Other deposit ($)</label>
+          <input id="l-othdep" type="number" min="0" step="0.01" value={otherDeposit}
+            onChange={(e) => setOtherDeposit(e.target.value)} />
+        </div>
+        {otherDeposit.trim() !== '' && (
+          <div className="field">
+            <label htmlFor="l-othdeplbl">What is the other deposit for?</label>
+            <input id="l-othdeplbl" type="text" value={otherDepositLabel}
+              onChange={(e) => setOtherDepositLabel(e.target.value)} />
+          </div>
+        )}
+        <div className="field">
+          <label htmlFor="l-nrfee">Non-refundable fee ($)</label>
+          <input id="l-nrfee" type="number" min="0" step="0.01" value={nonrefundableFee}
+            onChange={(e) => setNonrefundableFee(e.target.value)} />
+        </div>
+        {nonrefundableFee.trim() !== '' && (
+          <div className="field">
+            <label htmlFor="l-nrfeelbl">What is the fee for?</label>
+            <input id="l-nrfeelbl" type="text" placeholder="e.g. Move-in fee"
+              value={nonrefundableFeeLabel}
+              onChange={(e) => setNonrefundableFeeLabel(e.target.value)} />
+          </div>
+        )}
+        <div className="field">
+          <label htmlFor="l-nsf">Returned payment (NSF) fee ($)</label>
+          <input id="l-nsf" type="number" min="0" step="0.01" value={nsfFee}
+            onChange={(e) => setNsfFee(e.target.value)} />
+          <span className="muted">
+            Stated on the lease. Charged only if a payment is returned, not up front.
+          </span>
         </div>
 
         <div className="field">
@@ -199,6 +276,28 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
                 required value={lateFeeGraceDays}
                 onChange={(e) => setLateFeeGraceDays(e.target.value)} />
             </div>
+            <div className="field">
+              <label htmlFor="l-lfdaily">Additional daily fee ($ per day)</label>
+              <input id="l-lfdaily" type="number" min="0" step="0.01"
+                value={lateFeeDailyAmount}
+                onChange={(e) => setLateFeeDailyAmount(e.target.value)} />
+              <span className="muted">
+                Optional, charged on top of the one-off fee for each day the
+                rent stays unpaid. Stops accruing once it's paid.
+              </span>
+            </div>
+            {lateFeeDailyAmount.trim() !== '' && (
+              <div className="field">
+                <label htmlFor="l-lfdailystart">Daily fee starts this many days late</label>
+                <input id="l-lfdailystart" type="number" min="0" required
+                  value={lateFeeDailyStartDays}
+                  onChange={(e) => setLateFeeDailyStartDays(e.target.value)} />
+                <span className="muted">
+                  That day is itself charged — "starts at 6" means the first
+                  daily charge lands on day 6.
+                </span>
+              </div>
+            )}
           </>
         )}
 

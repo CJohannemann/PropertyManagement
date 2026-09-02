@@ -155,6 +155,18 @@ button.link {
 .lease-doc h2 { font-size: 1rem; margin: 1.5rem 0 0.35rem; }
 .lease-doc p { margin: 0; }
 
+.lease-doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+}
+.lease-doc-table td {
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.lease-doc-table td.amount { text-align: right; white-space: nowrap; }
+.lease-doc-table tr.total td { font-weight: 600; border-bottom: none; }
+
 .sig-block { margin-top: 2.5rem; }
 .sig-line {
   border-bottom: 1px solid var(--fg);
