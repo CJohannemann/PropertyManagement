@@ -1,0 +1,14 @@
+[Unit]
+Description=Rebuild PropertyManagement frontend if GitHub has new commits
+# Don't bother trying before the box has a working network.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/PropertyManagement
+ExecStart=/usr/bin/env bash deploy/auto-deploy.sh
+
+[Install]
+WantedBy=multi-user.target

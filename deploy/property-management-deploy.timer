@@ -1,0 +1,16 @@
+[Unit]
+Description=Check GitHub for PropertyManagement updates every 2 minutes
+
+[Timer]
+# First check shortly after boot, then every 2 minutes. The check itself
+# is one `git fetch` and exits silently when nothing changed, so the
+# steady-state cost of this is negligible.
+OnBootSec=2min
+OnUnitActiveSec=2min
+# Spreads the run a little so it doesn't land at the same instant as the
+# other timers already on this box (ibc-backup, farmhand-disk-check).
+RandomizedDelaySec=20s
+Unit=property-management-deploy.service
+
+[Install]
+WantedBy=timers.target
