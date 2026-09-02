@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react'
 import { supabase, describeError } from '../../lib/supabase'
 import { PropertyDetail, type PropertySummary } from '../PropertyDetail'
 import { RentStatus } from '../RentStatus'
+import { MaintenanceRequests } from '../MaintenanceRequests'
 
 type Property = PropertySummary & { units: { id: string }[] }
 
-export function PropertyManagerDashboard({ organizationName }: { organizationName: string }) {
+type Props = { organizationId: string; organizationName: string; memberId: string }
+
+export function PropertyManagerDashboard({ organizationId, organizationName, memberId }: Props) {
   const [properties, setProperties] = useState<Property[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<PropertySummary | null>(null)
@@ -41,6 +44,10 @@ export function PropertyManagerDashboard({ organizationName }: { organizationNam
     <div>
       <h2>Rent status</h2>
       <RentStatus />
+
+      <div style={{ marginTop: '2rem' }}>
+        <MaintenanceRequests organizationId={organizationId} memberId={memberId} />
+      </div>
 
       <h2 style={{ marginTop: '2rem' }}>Properties</h2>
       {error && <p className="error-text">{error}</p>}

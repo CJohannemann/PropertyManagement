@@ -49,6 +49,43 @@ services:
     ports:
       - "127.0.0.1:8002:3000"
 
+  # Receipt photos and lease documents. The supabase/postgres image already
+  # ships the `storage` schema (buckets, objects), so this needs no
+  # migration of ours — only the service that puts files on disk and
+  # enforces access against those tables.
+  #
+  # FILE_SIZE_LIMIT is 15MB: a modern phone camera produces 3-8MB, and a
+  # technician photographing a receipt in a dim basement should not have an
+  # upload rejected for being a large picture.
+  storage:
+    image: supabase/storage-api:v1.11.13
+    restart: unless-stopped
+    depends_on:
+      - db
+      - rest
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      # Storage asks PostgREST about the database rather than reaching for
+      # it directly.
+      POSTGREST_URL: http://rest:3000
+      FILE_SIZE_LIMIT: 15728640
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: stub
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+    volumes:
+      # Files live on the host, not inside the container: the container is
+      # disposable and every receipt would go with it otherwise. Back this
+      # up alongside ./data/db — a receipt is a tax record.
+      - ./data/storage:/var/lib/storage
+    ports:
+      - "127.0.0.1:5002:5000"
+
   auth:
     image: supabase/gotrue:v2.170.0
     restart: unless-stopped

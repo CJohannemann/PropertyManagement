@@ -4,9 +4,12 @@ import {
   fetchCharges, outstanding, totalOutstanding, isOverdue, money, chargeLabel,
   type ChargeWithPlace,
 } from '../../lib/charges'
+import { fetchRequests, type MaintenanceRequest } from '../../lib/maintenance'
+import { RequestRepair } from '../RequestRepair'
 
 type Lease = {
   id: string
+  unit_id: string
   rent_amount: number
   status: string
   start_date: string
@@ -16,9 +19,13 @@ type Lease = {
   fee_payer: 'landlord' | 'tenant'
 }
 
-export function TenantDashboard() {
+type Props = { memberId: string }
+
+export function TenantDashboard({ memberId }: Props) {
   const [leases, setLeases] = useState<Lease[] | null>(null)
   const [charges, setCharges] = useState<ChargeWithPlace[] | null>(null)
+  const [requests, setRequests] = useState<MaintenanceRequest[]>([])
+  const [reporting, setReporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -26,7 +33,7 @@ export function TenantDashboard() {
     // No explicit filter — RLS already scopes both to this tenant.
     supabase
       .from('leases')
-      .select('id, rent_amount, status, start_date, end_date, rent_due_day, deposit_amount, fee_payer')
+      .select('id, unit_id, rent_amount, status, start_date, end_date, rent_due_day, deposit_amount, fee_payer')
       .then(({ data, error }) => {
         if (error) setError(describeError(error))
         else setLeases(data as unknown as Lease[])
@@ -34,7 +41,14 @@ export function TenantDashboard() {
     fetchCharges()
       .then(setCharges)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+    loadRequests()
   }, [])
+
+  function loadRequests() {
+    fetchRequests()
+      .then(setRequests)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+  }
 
   if (error) return <p className="error-text">{error}</p>
   if (leases === null || charges === null) return <p className="muted">Loading…</p>
@@ -90,6 +104,40 @@ export function TenantDashboard() {
                 {Number(c.amount_paid) > 0 && ` · ${money(Number(c.amount_paid))} paid`}
                 {outstanding(c) > 0 && ` · ${money(outstanding(c))} left`}
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'center', marginTop: '2rem' }}>
+        <h2>Repairs</h2>
+        {!reporting && (
+          <button className="link" onClick={() => setReporting(true)}>
+            + Report a problem
+          </button>
+        )}
+      </div>
+      {reporting && (
+        <RequestRepair
+          unitId={lease.unit_id}
+          memberId={memberId}
+          onDone={() => { setReporting(false); loadRequests() }}
+        />
+      )}
+      {!reporting && requests.length === 0 && (
+        <p className="empty-state">Nothing reported.</p>
+      )}
+      {requests.length > 0 && (
+        <div className="card-list">
+          {requests.map((r) => (
+            <div key={r.id}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <strong>{r.category}</strong>
+                <span className="muted" style={{ margin: 0 }}>{r.status}</span>
+              </div>
+              <div>{r.description}</div>
+              <div className="muted">Reported {r.created_at.slice(0, 10)}</div>
             </div>
           ))}
         </div>

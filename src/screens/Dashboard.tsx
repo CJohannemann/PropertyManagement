@@ -78,13 +78,20 @@ export function Dashboard() {
           <AdminDashboard
             organizationId={membership.organization_id}
             organizationName={orgName}
+            memberId={membership.id}
           />
         )}
         {membership.role === 'property_manager' && (
-          <PropertyManagerDashboard organizationName={orgName} />
+          <PropertyManagerDashboard
+            organizationId={membership.organization_id}
+            organizationName={orgName}
+            memberId={membership.id}
+          />
         )}
-        {membership.role === 'technician' && <TechnicianDashboard />}
-        {membership.role === 'tenant' && <TenantDashboard />}
+        {membership.role === 'technician' && (
+          <TechnicianDashboard memberId={membership.id} />
+        )}
+        {membership.role === 'tenant' && <TenantDashboard memberId={membership.id} />}
       </main>
     </div>
   )

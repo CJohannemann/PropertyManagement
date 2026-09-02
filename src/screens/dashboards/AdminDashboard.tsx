@@ -3,12 +3,13 @@ import { supabase, describeError } from '../../lib/supabase'
 import { PropertyDetail, type PropertySummary } from '../PropertyDetail'
 import { RentStatus } from '../RentStatus'
 import { LeaseTemplates } from '../LeaseTemplates'
+import { MaintenanceRequests } from '../MaintenanceRequests'
 
 type Property = PropertySummary & { units: { id: string }[] }
 
-type Props = { organizationId: string; organizationName: string }
+type Props = { organizationId: string; organizationName: string; memberId: string }
 
-export function AdminDashboard({ organizationId, organizationName }: Props) {
+export function AdminDashboard({ organizationId, organizationName, memberId }: Props) {
   const [properties, setProperties] = useState<Property[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -56,6 +57,10 @@ export function AdminDashboard({ organizationId, organizationName }: Props) {
     <div>
       <h2>Rent status</h2>
       <RentStatus />
+
+      <div style={{ marginTop: '2rem' }}>
+        <MaintenanceRequests organizationId={organizationId} memberId={memberId} />
+      </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem' }}>
         <h2>Properties</h2>

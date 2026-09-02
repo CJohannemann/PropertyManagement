@@ -55,16 +55,31 @@ function start() {
   docker(['run', '-d', '--name', CONTAINER, '-e', 'POSTGRES_PASSWORD=test', IMAGE],
     { stdio: 'ignore' })
 
-  // supabase/postgres restarts itself partway through its own init to load
-  // extensions that need shared_preload_libraries. A single successful
-  // ping can land in the window before that restart, so require several in
-  // a row: the restart resets the streak instead of us proceeding into a
-  // connection that is about to be killed mid-statement.
+  // supabase/postgres runs its init scripts against a temporary server,
+  // then SHUTS THAT SERVER DOWN and starts the real one. Waiting on
+  // pg_isready alone is a race: it answers yes during the init server's
+  // life, and a schema load started then dies with "terminating connection
+  // due to administrator command" partway through.
+  //
+  // An earlier version required five consecutive successful pings, which
+  // only made the race less likely — five seconds of uptime is easily
+  // satisfied before the shutdown. Waiting for the image's own
+  // init-complete line is deterministic instead of hopeful.
+  const MARKER = 'PostgreSQL init process complete'
+  let initDone = false
+  for (let i = 0; i < 180; i++) {
+    const logs = docker(['logs', CONTAINER], { stdio: ['ignore', 'pipe', 'pipe'] })
+    if (logs.includes(MARKER)) { initDone = true; break }
+    execSync('sleep 1', { stdio: 'ignore' })
+  }
+  if (!initDone) throw new Error('Postgres init never completed')
+
+  // Then the real server still has to come up.
   let streak = 0
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 60; i++) {
     try {
       docker(['exec', CONTAINER, 'pg_isready', '-U', 'postgres'], { stdio: 'ignore' })
-      if (++streak >= 5) return
+      if (++streak >= 3) return
     } catch { streak = 0 }
     execSync('sleep 1', { stdio: 'ignore' })
   }

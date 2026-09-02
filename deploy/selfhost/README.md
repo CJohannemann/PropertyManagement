@@ -89,7 +89,12 @@ It's safe to run by hand at any time — it won't double-bill.
 ```bash
 cd ~/PropertyManagement/deploy/selfhost
 docker compose exec db pg_dump -U postgres postgres | gzip > ~/property-management-backup-$(date +%F).sql.gz
+tar czf ~/property-management-receipts-$(date +%F).tar.gz data/storage
 ```
+
+Both halves matter: the dump holds the records, `data/storage` holds the
+receipt photos those records refer to. A receipt is a tax document, and
+backing up only the database leaves rows pointing at files that are gone.
 
 Worth a systemd timer once real tenant data is in here — the baseball
 site's `ibc-backup.timer` is a working example to copy, and FarmHand's
