@@ -75,9 +75,14 @@ export function Dashboard() {
       </header>
       <main className="app-main">
         {membership.role === 'admin' && (
-          <AdminDashboard organizationId={membership.organization_id} />
+          <AdminDashboard
+            organizationId={membership.organization_id}
+            organizationName={orgName}
+          />
         )}
-        {membership.role === 'property_manager' && <PropertyManagerDashboard />}
+        {membership.role === 'property_manager' && (
+          <PropertyManagerDashboard organizationName={orgName} />
+        )}
         {membership.role === 'technician' && <TechnicianDashboard />}
         {membership.role === 'tenant' && <TenantDashboard />}
       </main>

@@ -65,12 +65,14 @@ export async function createInvite(
   email: string,
   role: OrgRole,
   leaseId?: string,
+  fullName?: string,
 ): Promise<{ token: string; expires_at: string }> {
   if (!supabase) throw new Error('Supabase not configured')
   const { data, error } = await supabase.rpc('create_invite', {
     invite_email: email,
     wanted_role: role,
     wanted_lease_id: leaseId ?? null,
+    invite_full_name: fullName ?? null,
   })
   if (error) throw error
   const rows = data as { token: string; expires_at: string }[]

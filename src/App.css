@@ -119,3 +119,79 @@ button.link {
   padding: 2rem 0;
   text-align: center;
 }
+
+/* ----------------------------------------------------- lease document -- */
+
+.lease-doc-overlay {
+  padding: 1.5rem;
+}
+
+.lease-doc-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 7.5in;
+  margin: 0 auto 1rem;
+}
+
+/*
+ * Sized in inches, not pixels: this is measured against paper, and 7.5in
+ * is US Letter minus half-inch margins. On screen it just reads as a
+ * sensible column width.
+ */
+.lease-doc {
+  max-width: 7.5in;
+  margin: 0 auto;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1in 0.75in;
+  line-height: 1.6;
+}
+
+.lease-doc h1 { font-size: 1.4rem; margin: 0 0 0.25rem; text-align: center; }
+.lease-doc-sub { text-align: center; color: var(--muted); margin: 0 0 2rem; }
+.lease-doc h2 { font-size: 1rem; margin: 1.5rem 0 0.35rem; }
+.lease-doc p { margin: 0; }
+
+.sig-block { margin-top: 2.5rem; }
+.sig-line {
+  border-bottom: 1px solid var(--fg);
+  height: 2.5rem;
+  margin-bottom: 0.35rem;
+}
+.sig-date { color: var(--muted); margin-top: 0.35rem; }
+
+@media print {
+  /*
+   * Print only the document. Everything else on the page — the app header,
+   * the property list behind the overlay, the buttons — is hidden by
+   * printing from a blank slate and re-showing just this subtree, rather
+   * than trying to enumerate what to hide.
+   */
+  body * { visibility: hidden; }
+  .lease-doc, .lease-doc * { visibility: visible; }
+  .no-print { display: none !important; }
+
+  .lease-doc-overlay { padding: 0; }
+  .lease-doc {
+    position: absolute;
+    left: 0;
+    top: 0;
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: #fff;
+    color: #000;
+  }
+
+  /* A signature block split across a page break looks like an error. */
+  .sig-block, .lease-doc section { break-inside: avoid; }
+  .lease-doc-signatures { break-before: auto; }
+
+  @page { margin: 0.75in; }
+}

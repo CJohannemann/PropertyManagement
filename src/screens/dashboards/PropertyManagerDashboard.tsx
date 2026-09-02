@@ -5,7 +5,7 @@ import { RentStatus } from '../RentStatus'
 
 type Property = PropertySummary & { units: { id: string }[] }
 
-export function PropertyManagerDashboard() {
+export function PropertyManagerDashboard({ organizationName }: { organizationName: string }) {
   const [properties, setProperties] = useState<Property[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<PropertySummary | null>(null)
@@ -31,6 +31,7 @@ export function PropertyManagerDashboard() {
         // Adding/removing units is admin-only per the capability matrix in
         // docs/domain-model.md; leases and tenant invites are not.
         canManageUnits={false}
+        organizationName={organizationName}
         onBack={() => { setSelected(null); load() }}
       />
     )

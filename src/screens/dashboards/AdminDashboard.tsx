@@ -5,9 +5,9 @@ import { RentStatus } from '../RentStatus'
 
 type Property = PropertySummary & { units: { id: string }[] }
 
-type Props = { organizationId: string }
+type Props = { organizationId: string; organizationName: string }
 
-export function AdminDashboard({ organizationId }: Props) {
+export function AdminDashboard({ organizationId, organizationName }: Props) {
   const [properties, setProperties] = useState<Property[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -35,6 +35,7 @@ export function AdminDashboard({ organizationId }: Props) {
       <PropertyDetail
         property={selected}
         canManageUnits
+        organizationName={organizationName}
         onBack={() => { setSelected(null); load() }}
       />
     )

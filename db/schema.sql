@@ -1,4 +1,20 @@
 -- Property Management — initial Postgres schema
+--
+-- READ THIS BEFORE EDITING: this file is the *baseline*, not the current
+-- state of the database. Later changes live in db/migrations/, and
+-- apply-schema.sh runs this file, then seed.sql, then every migration in
+-- order — so a fresh install converges on the same schema an existing one
+-- has. Changes therefore belong in a NEW migration, not in here; editing
+-- this file only affects installs that don't exist yet, and duplicating a
+-- change into both places is how the two quietly diverge.
+--
+-- Things below that a migration has since changed:
+--   001  create_invite: search_path also needs `extensions` for pgcrypto
+--   002  rent_charges.parent_charge_id, and the rent billing functions
+--   003  create_organization is allowlisted via org_creation_allowlist
+--   004  org_members.full_name / invites.full_name, and create_invite
+--        gains a fourth argument
+
 -- Targets Supabase (auth.users assumed present — GoTrue must have bootstrapped
 -- the auth schema before this runs; see FarmHand's deploy/selfhost/README.md
 -- for the self-hosted bring-up order, which this project will mirror).

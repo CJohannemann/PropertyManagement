@@ -3,6 +3,7 @@ import { fetchUnits, createUnit, type Unit } from '../lib/units'
 import { fetchLeasesForUnit, fetchLeaseTenants, type Lease } from '../lib/leases'
 import { LeaseForm } from './LeaseForm'
 import { InviteTenant } from './InviteTenant'
+import { LeaseDocument } from './LeaseDocument'
 
 export type PropertySummary = {
   id: string
@@ -17,10 +18,13 @@ type Props = {
   property: PropertySummary
   /** Property managers can do everything here except add/remove units. */
   canManageUnits: boolean
+  organizationName: string
   onBack: () => void
 }
 
-export function PropertyDetail({ property, canManageUnits, onBack }: Props) {
+export function PropertyDetail({
+  property, canManageUnits, organizationName, onBack,
+}: Props) {
   const [units, setUnits] = useState<Unit[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [addingUnit, setAddingUnit] = useState(false)
@@ -71,18 +75,22 @@ export function PropertyDetail({ property, canManageUnits, onBack }: Props) {
 
       <div className="card-list">
         {units?.map((u) => (
-          <UnitRow key={u.id} unit={u} stateCode={property.state} />
+          <UnitRow key={u.id} unit={u} property={property}
+            organizationName={organizationName} />
         ))}
       </div>
     </div>
   )
 }
 
-function UnitRow({ unit, stateCode }: { unit: Unit; stateCode: string }) {
+function UnitRow({
+  unit, property, organizationName,
+}: { unit: Unit; property: PropertySummary; organizationName: string }) {
   const [leases, setLeases] = useState<Lease[] | null>(null)
   const [tenantCounts, setTenantCounts] = useState<Record<string, number>>({})
   const [creatingLease, setCreatingLease] = useState(false)
   const [invitingFor, setInvitingFor] = useState<string | null>(null)
+  const [viewingDoc, setViewingDoc] = useState<Lease | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function load() {
@@ -104,6 +112,21 @@ function UnitRow({ unit, stateCode }: { unit: Unit; stateCode: string }) {
   }, [unit.id])
 
   const activeLease = leases?.find((l) => l.status === 'active') ?? null
+
+  if (viewingDoc) {
+    return (
+      <LeaseDocument
+        lease={viewingDoc}
+        propertyName={property.name}
+        premises={`${property.address_line1}, ${property.city}, ${property.state} ${property.zip}${
+          unit.label ? ` (${unit.label})` : ''
+        }`}
+        stateCode={property.state}
+        organizationName={organizationName}
+        onClose={() => setViewingDoc(null)}
+      />
+    )
+  }
 
   return (
     <div>
@@ -130,11 +153,16 @@ function UnitRow({ unit, stateCode }: { unit: Unit; stateCode: string }) {
               ? `${tenantCounts[activeLease.id]} tenant(s)`
               : 'no tenant yet'}
           </div>
-          {tenantCounts[activeLease.id] === 0 && invitingFor !== activeLease.id && (
-            <button className="link" onClick={() => setInvitingFor(activeLease.id)}>
-              Invite tenant
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <button className="link" onClick={() => setViewingDoc(activeLease)}>
+              View / print lease
             </button>
-          )}
+            {tenantCounts[activeLease.id] === 0 && invitingFor !== activeLease.id && (
+              <button className="link" onClick={() => setInvitingFor(activeLease.id)}>
+                Invite tenant
+              </button>
+            )}
+          </div>
           {invitingFor === activeLease.id && (
             <InviteTenant
               leaseId={activeLease.id}
@@ -147,7 +175,7 @@ function UnitRow({ unit, stateCode }: { unit: Unit; stateCode: string }) {
           {creatingLease ? (
             <LeaseForm
               unitId={unit.id}
-              stateCode={stateCode}
+              stateCode={property.state}
               onCreated={() => { setCreatingLease(false); load() }}
               onCancel={() => setCreatingLease(false)}
             />
