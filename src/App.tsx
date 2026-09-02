@@ -32,8 +32,18 @@ export default function App() {
   useEffect(() => {
     if (checking || recovery || !supabaseConfigured) return
 
+    // '/' is in this list because there's no signed-out landing page to
+    // show there — unlike FarmHand, which has a marketing page at the
+    // root. Leaving it out rendered a blank page for anyone visiting the
+    // bare URL signed out, which is the first thing every new visitor
+    // does.
     if (!session) {
-      if (route === '/dashboard' || route === '/setup') {
+      if (
+        route === '/' ||
+        route === '/dashboard' ||
+        route === '/setup' ||
+        route === '/reset-password'
+      ) {
         navigate('/login', { replace: true })
       }
       return
@@ -88,6 +98,15 @@ export default function App() {
       return session ? <Setup /> : null
     case '/dashboard':
       return session ? <Dashboard /> : null
+    // Normally unreachable: arriving from a reset email fires
+    // PASSWORD_RECOVERY, and the `recovery` check above catches it before
+    // this switch runs. This covers landing on the URL directly — without
+    // a case here it fell through to NotFound, since the route is declared
+    // in lib/route.ts but was never handled.
+    case '/reset-password':
+      return session ? <ResetPassword onDone={() => navigate('/dashboard', { replace: true })} /> : null
+    // '/' renders nothing only for the instant before the effect above
+    // redirects (to /login signed out, /dashboard signed in).
     case '/':
       return null
     default:
