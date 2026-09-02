@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, describeError } from '../../lib/supabase'
 import { PropertyDetail, type PropertySummary } from '../PropertyDetail'
 import { RentStatus } from '../RentStatus'
+import { LeaseTemplates } from '../LeaseTemplates'
 
 type Property = PropertySummary & { units: { id: string }[] }
 
@@ -12,6 +13,7 @@ export function AdminDashboard({ organizationId, organizationName }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState<PropertySummary | null>(null)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   async function load() {
     if (!supabase) return
@@ -29,6 +31,15 @@ export function AdminDashboard({ organizationId, organizationName }: Props) {
     // to the caller's org — but a different org's admin sees different
     // rows, so it's the effect's real dependency.
   }, [organizationId])
+
+  if (showTemplates) {
+    return (
+      <LeaseTemplates
+        organizationId={organizationId}
+        onBack={() => setShowTemplates(false)}
+      />
+    )
+  }
 
   if (selected) {
     return (
@@ -48,9 +59,14 @@ export function AdminDashboard({ organizationId, organizationName }: Props) {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem' }}>
         <h2>Properties</h2>
-        <button className="link" onClick={() => setShowForm((s) => !s)}>
-          {showForm ? 'Cancel' : '+ Add property'}
-        </button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button className="link" onClick={() => setShowTemplates(true)}>
+            Lease template
+          </button>
+          <button className="link" onClick={() => setShowForm((s) => !s)}>
+            {showForm ? 'Cancel' : '+ Add property'}
+          </button>
+        </div>
       </div>
 
       {showForm && (

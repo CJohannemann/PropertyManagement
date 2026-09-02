@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { money } from '../lib/charges'
-import { LEASE_CLAUSES } from '../lib/leaseTemplate'
+import { fetchDefaultTemplate, type TemplateWithClauses } from '../lib/leaseTemplates'
 import type { Lease } from '../lib/leases'
 
 type Props = {
@@ -32,6 +32,8 @@ export function LeaseDocument({
   lease, propertyName, premises, stateCode, organizationName, onClose,
 }: Props) {
   const [parties, setParties] = useState<PartyRow[] | null>(null)
+  const [template, setTemplate] = useState<TemplateWithClauses | null | 'loading'>('loading')
+  const [templateError, setTemplateError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!supabase) return
@@ -52,6 +54,15 @@ export function LeaseDocument({
         )
       })
   }, [lease.id])
+
+  useEffect(() => {
+    fetchDefaultTemplate()
+      .then(setTemplate)
+      .catch((e) => {
+        setTemplate(null)
+        setTemplateError(e instanceof Error ? e.message : String(e))
+      })
+  }, [])
 
   const named = (parties ?? []).map((p) => p.full_name).filter(Boolean) as string[]
   // An unnamed party is shown as a blank rather than an email or an id:
@@ -186,9 +197,38 @@ export function LeaseDocument({
 
   // A clause whose data is absent is dropped whole. Printing "Parking
   // provided: ." would be worse than saying nothing about parking.
-  const clauses = LEASE_CLAUSES.filter(
-    (c) => !c.omitIfEmpty?.some((k) => !values[k]?.trim()),
-  )
+  const clauses = (template === 'loading' || template === null ? [] : template.clauses)
+    .filter((c) => !c.omit_if_empty?.some((k) => !values[k]?.trim()))
+
+  if (template === 'loading') {
+    return <p className="muted">Loading lease template…</p>
+  }
+
+  // No template is a normal state for a new organization, not an error:
+  // the app deliberately holds no lease wording of its own, because that
+  // text is the landlord's document and their attorney's responsibility.
+  if (template === null) {
+    return (
+      <div>
+        <button className="link" onClick={onClose}>← Back</button>
+        <h2>No lease template yet</h2>
+        {templateError && <p className="error-text">{templateError}</p>}
+        <p className="muted">
+          The figures for this lease are all recorded — rent, dates,
+          deposits, fees — but printing an agreement needs the clause
+          wording, and that's your document rather than something this app
+          can supply on your behalf. Different states require different
+          disclosures and prohibit different terms.
+        </p>
+        <p className="muted">
+          Set one up under <strong>Lease templates</strong>. You can paste
+          in the lease you already use, or start from a sample and edit it —
+          either way, have your attorney read it before you sign a tenant
+          to it.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="lease-doc-overlay">

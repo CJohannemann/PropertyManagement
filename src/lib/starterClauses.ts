@@ -1,17 +1,27 @@
 /**
- * The clause text of the lease agreement.
+ * An OPTIONAL starting point a landlord can copy into their own lease
+ * template, then edit. Not the app's lease, and not used by anything
+ * unless a landlord explicitly chooses to start from it.
  *
  * ─────────────────────────────────────────────────────────────────────
- *  HAVE A KENTUCKY ATTORNEY READ THIS BEFORE USING IT WITH A TENANT.
+ *  NOT LEGAL ADVICE. Whoever uses this is responsible for their own
+ *  lease, reviewed by their own attorney, for their own state.
  * ─────────────────────────────────────────────────────────────────────
  *
- * This was adapted from Chris's existing signed lease (Kentucky, 2025),
- * which is the sensible basis: it is already in force on these properties
- * and came from a state-specific template. It is not a copy — provider
- * branding is gone, and the clauses below were rewritten and reordered to
- * fit the data this app actually holds.
+ * Lease text is per-organization data (see
+ * db/migrations/008_lease_templates.sql), because a product serving
+ * several landlords in several states cannot supply one lease for all of
+ * them — and shouldn't be the author of anyone's legal documents. This
+ * file exists only so a landlord starting from nothing has something to
+ * edit rather than a blank page.
  *
- * Two deliberate departures from that document:
+ * These clauses were adapted from one Kentucky lease from 2025. That
+ * makes them Kentucky-shaped, and quite possibly wrong elsewhere: states
+ * differ on required disclosures, deposit handling, notice periods and
+ * prohibited clauses. Treat this as a skeleton to replace, not a document
+ * to rely on.
+ *
+ * Two deliberate departures from the lease it came from:
  *
  *  1. Its criminal-mischief clause is omitted. That clause described
  *     criminal mischief in the second degree as a "Class A Felony" and the
@@ -31,6 +41,7 @@
  * Anything in {braces} is substituted from the lease data — see
  * LeaseDocument.tsx. A clause whose data is absent is dropped entirely
  * rather than printed with a blank, which is what `omitIfEmpty` marks.
+ * Both survive being copied into a landlord's own template.
  */
 
 export type LeaseClause = {
@@ -43,7 +54,7 @@ export type LeaseClause = {
   omitIfEmpty?: string[]
 }
 
-export const LEASE_CLAUSES: LeaseClause[] = [
+export const STARTER_CLAUSES: LeaseClause[] = [
   {
     heading: 'Parties and Premises',
     body:
