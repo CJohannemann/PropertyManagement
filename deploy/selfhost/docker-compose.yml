@@ -12,13 +12,14 @@
 # already-running "selfhost" project on the same Docker host.
 name: property-management
 
-# TEMPORARY: no domain purchased yet, so this stack is reached over the
-# VPS's bare IP (15.204.120.16) on its own port, plain HTTP, instead of a
-# domain + certbot TLS like FarmHand. See nginx-property-management-api.conf
-# and README.md for the migration path once a domain exists — it's a
-# config change, not a rebuild.
+# Reached at https://properties.farmhandmanager.com — nginx on the host
+# terminates TLS and routes /rest/v1 and /auth/v1 in here, while serving
+# the app itself from the same origin (deploy/nginx-property-management.conf).
 #
-# Ports intentionally avoid FarmHand's on this box (5432, 8001, 9999).
+# Nothing here is exposed publicly: every published port binds to
+# 127.0.0.1, so these containers are reachable only from the VPS itself,
+# with nginx the sole way in. Ports intentionally avoid FarmHand's on this
+# box (5432, 8001, 9999).
 services:
   db:
     image: supabase/postgres:15.1.1.78
@@ -56,12 +57,14 @@ services:
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
-      # Bare IP:port, not a domain — see the TEMPORARY note above.
-      API_EXTERNAL_URL: http://${API_HOST}:${API_PORT}
-      # Placeholder until the frontend actually exists somewhere; update
-      # both this and GOTRUE_URI_ALLOW_LIST once it does (see README.md).
-      GOTRUE_SITE_URL: ${FRONTEND_DEV_URL}
-      GOTRUE_URI_ALLOW_LIST: ${FRONTEND_DEV_URL}/**,http://${API_HOST}:${API_PORT}/**
+      # One origin serves both the app and this API (see
+      # deploy/nginx-property-management.conf), so all three of these are
+      # the same URL. API_EXTERNAL_URL is also what GoTrue builds
+      # confirmation and password-reset links from — pointing it anywhere
+      # the user's browser can't reach silently breaks those emails.
+      API_EXTERNAL_URL: ${APP_URL}
+      GOTRUE_SITE_URL: ${APP_URL}
+      GOTRUE_URI_ALLOW_LIST: ${APP_URL}/**
       GOTRUE_DB_DRIVER: postgres
       DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
@@ -71,13 +74,18 @@ services:
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_DISABLE_SIGNUP: "false"
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
-      # TEMPORARY, unlike FarmHand's (which is "false" now that it's
-      # public-facing): true here because there's no frontend /verify page
-      # yet for a confirmation link to land on, and this is Chris-only
-      # testing so far, not a public signup page. Flip to "false" before
-      # any real tenant/technician/PM invite goes out — an unconfirmed
-      # signup on a rent-payment app is not something to leave open.
-      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      # Accounts must confirm their email address. This needs the SMTP_*
+      # values below to be real: with autoconfirm off and mail broken,
+      # nobody can complete a signup at all. The confirmation link points
+      # at the bare /verify path, which needs the `location = /verify`
+      # block in deploy/nginx-property-management.conf — without it every
+      # confirmation email 404s.
+      #
+      # Note this is not the main thing stopping strangers from using this
+      # server: a confirmed email is easy to come by. Organization
+      # creation is gated separately, in the database, by
+      # db/migrations/003_restrict_org_creation.sql.
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
       GOTRUE_SMTP_HOST: ${SMTP_HOST}
       GOTRUE_SMTP_PORT: ${SMTP_PORT}
       GOTRUE_SMTP_USER: ${SMTP_USER}

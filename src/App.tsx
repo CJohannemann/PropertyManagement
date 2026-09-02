@@ -65,8 +65,13 @@ export default function App() {
         <div className="auth-card">
           <h1>Backend not configured</h1>
           <p className="muted">
-            Copy .env.example to .env and fill in VITE_SUPABASE_URL /
-            VITE_SUPABASE_ANON_KEY.
+            Copy .env.example to .env and fill in VITE_SUPABASE_URL and
+            VITE_SUPABASE_ANON_KEY, then rebuild — both are baked in at
+            build time.
+          </p>
+          <p className="muted">
+            VITE_SUPABASE_URL must be https (plain http is accepted only
+            for localhost during development).
           </p>
         </div>
       </div>

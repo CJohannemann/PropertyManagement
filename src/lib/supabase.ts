@@ -8,13 +8,16 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
  * local-only mode — there's nothing useful to show without a backend — so
  * this only gates a friendly setup message instead of a real fallback.
  *
- * Accepts http:// as well as https:// for now: the backend is reachable at
- * a bare IP over plain HTTP until a domain is bought (see
- * deploy/selfhost/README.md's "Moving to a real domain later"). Tighten
- * this back to https-only once that migration happens.
+ * Requires https, with plain http allowed only against localhost for
+ * development. This app carries lease terms, rent balances and (soon)
+ * payment flows, so an http:// backend URL in a real deployment means
+ * session tokens crossing the network in the clear — worth refusing to
+ * start over rather than quietly working.
  */
+const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:|$|\/)/.test(url)
+
 export const supabaseConfigured =
-  (url.startsWith('http://') || url.startsWith('https://')) &&
+  (url.startsWith('https://') || (isLocalhost && url.startsWith('http://'))) &&
   key.length > 20
 
 export const supabase = supabaseConfigured
