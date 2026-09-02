@@ -1,0 +1,57 @@
+:root {
+  --bg: #ffffff;
+  --card: #f7f8fa;
+  --fg: #1a1c22;
+  --muted: #5c6270;
+  --line: #e0e2e8;
+  --accent: #2f5fd6;
+  --danger: #c0392b;
+
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+/*
+ * Three-way theme: "system" (default, no attribute) follows the OS via the
+ * media query below; "light"/"dark" would be an explicit user choice
+ * (no theme switcher built yet, but the tokens are ready for one). The
+ * media query is guarded with :not([data-theme="light"]) so an explicit
+ * light choice can't be overridden by a dark OS.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14161c;
+    --card: #1c1f27;
+    --fg: #e8e9ee;
+    --muted: #9298a6;
+    --line: #2b2f3a;
+    --accent: #7f9dee;
+    --danger: #e0685c;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #14161c;
+  --card: #1c1f27;
+  --fg: #e8e9ee;
+  --muted: #9298a6;
+  --line: #2b2f3a;
+  --accent: #7f9dee;
+  --danger: #e0685c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
