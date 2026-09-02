@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createLease } from '../lib/leases'
+import { createLease, UTILITY_NAMES } from '../lib/leases'
 import { fetchStateRegulation, type StateRegulation } from '../lib/regulations'
 
 type Props = {
@@ -52,6 +52,16 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
   const [lateFeeGraceDays, setLateFeeGraceDays] = useState('')
   const [lateFeeDailyAmount, setLateFeeDailyAmount] = useState('')
   const [lateFeeDailyStartDays, setLateFeeDailyStartDays] = useState('')
+  const [smokingPolicy, setSmokingPolicy] =
+    useState<'not_permitted' | 'permitted' | 'outdoors_only'>('not_permitted')
+  const [petsAllowed, setPetsAllowed] = useState(false)
+  const [petsDescription, setPetsDescription] = useState('')
+  const [petRent, setPetRent] = useState('')
+  const [insuranceRequired, setInsuranceRequired] = useState(false)
+  const [parkingDescription, setParkingDescription] = useState('')
+  const [additionalTerms, setAdditionalTerms] = useState('')
+  const [utilities, setUtilities] =
+    useState<Record<string, 'tenant' | 'landlord' | 'na'>>({})
   const [feePayer, setFeePayer] = useState<'landlord' | 'tenant'>('landlord')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -109,6 +119,18 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
         lateFeeDailyAmount: lateFeeAutoApply ? num(lateFeeDailyAmount) : null,
         lateFeeDailyStartDays: lateFeeAutoApply ? num(lateFeeDailyStartDays) : null,
         feePayer,
+        smokingPolicy,
+        petsAllowed,
+        petsDescription: petsAllowed ? text(petsDescription) : null,
+        petRentAmount: petsAllowed ? num(petRent) : null,
+        rentersInsuranceRequired: insuranceRequired,
+        parkingDescription: text(parkingDescription),
+        // Only what was actually decided is stored, so a property with no
+        // HOA never prints an "HOA dues: N/A" row on the lease.
+        utilities: Object.fromEntries(
+          Object.entries(utilities).filter(([, who]) => who !== 'na'),
+        ),
+        additionalTerms: text(additionalTerms),
       })
       onCreated()
     } catch (err) {
@@ -300,6 +322,88 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
             )}
           </>
         )}
+
+        <h4 style={{ margin: '1.5rem 0 0.5rem' }}>Utilities</h4>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Anything left as "not applicable" is left off the lease entirely.
+        </p>
+        {UTILITY_NAMES.map((u) => (
+          <div className="field" key={u}>
+            <label htmlFor={`util-${u}`}>{u}</label>
+            <select id={`util-${u}`} value={utilities[u] ?? 'na'}
+              onChange={(e) => setUtilities((prev) => ({
+                ...prev, [u]: e.target.value as 'tenant' | 'landlord' | 'na',
+              }))}>
+              <option value="na">Not applicable</option>
+              <option value="tenant">Tenant pays</option>
+              <option value="landlord">Landlord pays</option>
+            </select>
+          </div>
+        ))}
+
+        <h4 style={{ margin: '1.5rem 0 0.5rem' }}>Rules</h4>
+
+        <div className="field">
+          <label htmlFor="l-smoking">Smoking</label>
+          <select id="l-smoking" value={smokingPolicy}
+            onChange={(e) => setSmokingPolicy(
+              e.target.value as 'not_permitted' | 'permitted' | 'outdoors_only')}>
+            <option value="not_permitted">Not permitted</option>
+            <option value="outdoors_only">Permitted outdoors only</option>
+            <option value="permitted">Permitted</option>
+          </select>
+        </div>
+
+        <div className="field">
+          <label>
+            <input type="checkbox" checked={petsAllowed}
+              onChange={(e) => setPetsAllowed(e.target.checked)} />
+            {' '}Pets allowed
+          </label>
+        </div>
+        {petsAllowed && (
+          <>
+            <div className="field">
+              <label htmlFor="l-pets">Which pets are permitted?</label>
+              <input id="l-pets" type="text" value={petsDescription}
+                placeholder="e.g. two domestic cats, under 15 lbs each"
+                onChange={(e) => setPetsDescription(e.target.value)} />
+            </div>
+            <div className="field">
+              <label htmlFor="l-petrent">Monthly pet rent ($)</label>
+              <input id="l-petrent" type="number" min="0" step="0.01" value={petRent}
+                onChange={(e) => setPetRent(e.target.value)} />
+              <span className="muted">
+                Added to the monthly rent charge, not billed separately.
+              </span>
+            </div>
+          </>
+        )}
+
+        <div className="field">
+          <label>
+            <input type="checkbox" checked={insuranceRequired}
+              onChange={(e) => setInsuranceRequired(e.target.checked)} />
+            {' '}Renters insurance required
+          </label>
+        </div>
+
+        <div className="field">
+          <label htmlFor="l-parking">Parking</label>
+          <input id="l-parking" type="text" value={parkingDescription}
+            placeholder="e.g. one off-street space, or street parking"
+            onChange={(e) => setParkingDescription(e.target.value)} />
+          <span className="muted">Leave blank to omit the parking clause.</span>
+        </div>
+
+        <div className="field">
+          <label htmlFor="l-addl">Additional terms</label>
+          <textarea id="l-addl" rows={3} value={additionalTerms}
+            onChange={(e) => setAdditionalTerms(e.target.value)} />
+          <span className="muted">
+            Printed on the lease, and stated to override conflicting clauses.
+          </span>
+        </div>
 
         {error && <p className="error-text">{error}</p>}
         <button className="primary" type="submit" disabled={busy}>

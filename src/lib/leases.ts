@@ -25,6 +25,15 @@ export type Lease = {
   late_fee_daily_amount: number | null
   late_fee_daily_start_days: number | null
   fee_payer: 'landlord' | 'tenant'
+  smoking_policy: 'not_permitted' | 'permitted' | 'outdoors_only'
+  pets_allowed: boolean
+  pets_description: string | null
+  pet_rent_amount: number | null
+  renters_insurance_required: boolean
+  parking_description: string | null
+  /** Utility name -> who pays. See db/migrations/007_lease_terms.sql. */
+  utilities: Record<string, 'tenant' | 'landlord' | 'na'>
+  additional_terms: string | null
 }
 
 const LEASE_COLUMNS =
@@ -32,7 +41,9 @@ const LEASE_COLUMNS =
   'pet_deposit_amount, other_deposit_amount, other_deposit_label, ' +
   'nonrefundable_fee_amount, nonrefundable_fee_label, prorated_rent_amount, ' +
   'nsf_fee_amount, status, late_fee_auto_apply, late_fee_type, late_fee_amount, ' +
-  'late_fee_grace_days, late_fee_daily_amount, late_fee_daily_start_days, fee_payer'
+  'late_fee_grace_days, late_fee_daily_amount, late_fee_daily_start_days, fee_payer, ' +
+  'smoking_policy, pets_allowed, pets_description, pet_rent_amount, ' +
+  'renters_insurance_required, parking_description, utilities, additional_terms'
 
 export type LeaseTenant = {
   id: string
@@ -72,7 +83,25 @@ export type NewLease = {
   lateFeeDailyAmount: number | null
   lateFeeDailyStartDays: number | null
   feePayer: 'landlord' | 'tenant'
+  smokingPolicy: 'not_permitted' | 'permitted' | 'outdoors_only'
+  petsAllowed: boolean
+  petsDescription: string | null
+  petRentAmount: number | null
+  rentersInsuranceRequired: boolean
+  parkingDescription: string | null
+  utilities: Record<string, 'tenant' | 'landlord' | 'na'>
+  additionalTerms: string | null
 }
+
+/**
+ * The services a lease normally allocates. Not stored in the database —
+ * a lease's `utilities` map holds only what was actually decided, so a
+ * property with no HOA never carries an "HOA dues: N/A" row.
+ */
+export const UTILITY_NAMES = [
+  'Electric', 'Gas', 'Water', 'Sewer / Septic', 'Trash', 'Internet',
+  'Cable / Satellite', 'Lawn care', 'Snow removal', 'HOA dues',
+] as const
 
 /**
  * Inserts a lease. The late-fee and fee-payer fields are re-checked
@@ -107,6 +136,14 @@ export async function createLease(input: NewLease): Promise<Lease> {
       late_fee_daily_amount: input.lateFeeDailyAmount,
       late_fee_daily_start_days: input.lateFeeDailyStartDays,
       fee_payer: input.feePayer,
+      smoking_policy: input.smokingPolicy,
+      pets_allowed: input.petsAllowed,
+      pets_description: input.petsDescription,
+      pet_rent_amount: input.petRentAmount,
+      renters_insurance_required: input.rentersInsuranceRequired,
+      parking_description: input.parkingDescription,
+      utilities: input.utilities,
+      additional_terms: input.additionalTerms,
     })
     .select(LEASE_COLUMNS)
     .single()

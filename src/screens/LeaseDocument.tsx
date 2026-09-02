@@ -122,15 +122,55 @@ export function LeaseDocument({
     ? `ends on ${lease.end_date}.`
     : 'continues month to month until terminated as permitted by law.'
 
+  const ordinal = (n: number) => {
+    const s = ['th', 'st', 'nd', 'rd']
+    // 11th/12th/13th are the exceptions the naive n%10 rule gets wrong.
+    const v = n % 100
+    return n + (s[(v - 20) % 10] || s[v] || s[0])
+  }
+
+  const utilities = Object.entries(
+    (lease.utilities ?? {}) as Record<string, string>,
+  ).filter(([, who]) => who === 'tenant' || who === 'landlord')
+
+  const petsClause = lease.pets_allowed
+    ? `Landlord permits Tenant to keep the following on the Premises: ${
+        lease.pets_description || 'as agreed in writing'
+      }.`
+    : 'No animals are permitted on the Premises.'
+
+  const petRentClause = lease.pet_rent_amount != null
+    ? `This amount includes monthly pet rent of ${money(Number(lease.pet_rent_amount))}.`
+    : ''
+
+  const smokingClause = {
+    not_permitted: 'Smoking is not permitted anywhere on the Premises.',
+    permitted: 'Smoking is permitted on the Premises.',
+    outdoors_only: 'Smoking is permitted outdoors only, and not inside the Premises.',
+  }[lease.smoking_policy] ?? 'Smoking is not permitted anywhere on the Premises.'
+
+  const insuranceClause = lease.renters_insurance_required
+    ? 'Tenant is required to obtain and maintain renters or liability insurance, and to ' +
+      'provide Landlord with evidence of it before moving in and on request during the term.'
+    : 'Tenant is not required to carry renters or liability insurance, but is strongly ' +
+      'encouraged to do so.'
+
   const values: Record<string, string> = {
     landlord: organizationName,
     tenants: tenantNames,
     premises,
+    agreementDate: new Date().toISOString().slice(0, 10),
     startDate: lease.start_date,
     termEnd,
-    rentAmount: money(Number(lease.rent_amount)),
-    rentDueDay: String(lease.rent_due_day),
-    depositAmount: money(Number(lease.deposit_amount)),
+    rentAmount: money(Number(lease.rent_amount) + Number(lease.pet_rent_amount ?? 0)),
+    rentDueDayOrdinal: ordinal(lease.rent_due_day),
+    petRentClause,
+    petsClause,
+    smokingClause,
+    insuranceClause,
+    parkingDescription: lease.parking_description ?? '',
+    additionalTerms: lease.additional_terms ?? '',
+    utilitiesTable: utilities.length ? 'yes' : '',
     lateFeeClause,
     feeClause,
     state: stateCode,
@@ -138,11 +178,17 @@ export function LeaseDocument({
 
   const fill = (s: string) =>
     s.replace(/\{(\w+)\}/g, (whole, key: string) =>
-      // An unknown placeholder is left visible rather than replaced with
-      // an empty string: a lease quietly missing a clause is far worse
-      // than one that obviously needs attention before it goes out.
+      // An unknown placeholder stays visible rather than becoming an empty
+      // string: a lease quietly missing a term is far worse than one that
+      // obviously needs attention before it goes out.
       key in values ? values[key] : whole,
     )
+
+  // A clause whose data is absent is dropped whole. Printing "Parking
+  // provided: ." would be worse than saying nothing about parking.
+  const clauses = LEASE_CLAUSES.filter(
+    (c) => !c.omitIfEmpty?.some((k) => !values[k]?.trim()),
+  )
 
   return (
     <div className="lease-doc-overlay">
@@ -184,7 +230,25 @@ export function LeaseDocument({
           </section>
         )}
 
-        {LEASE_CLAUSES.map((c, i) => (
+        {utilities.length > 0 && (
+          <section>
+            <h2>Utilities and services</h2>
+            <table className="lease-doc-table">
+              <tbody>
+                {utilities.map(([name, who]) => (
+                  <tr key={name}>
+                    <td>{name}</td>
+                    <td className="amount">
+                      {who === 'tenant' ? 'Tenant' : 'Landlord'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
+
+        {clauses.map((c, i) => (
           <section key={c.heading}>
             <h2>{i + 1}. {c.heading}</h2>
             <p>{fill(c.body)}</p>

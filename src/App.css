@@ -32,7 +32,7 @@
   color: var(--muted);
 }
 
-.field input, .field select {
+.field input, .field select, .field textarea {
   padding: 0.55rem 0.7rem;
   border: 1px solid var(--line);
   border-radius: 8px;
