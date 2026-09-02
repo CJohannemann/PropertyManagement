@@ -4,6 +4,7 @@ import { fetchLeasesForUnit, fetchLeaseTenants, type Lease } from '../lib/leases
 import { LeaseForm } from './LeaseForm'
 import { InviteTenant } from './InviteTenant'
 import { LeaseDocument } from './LeaseDocument'
+import { fetchSigningStatus, type SigningStatus } from '../lib/signatures'
 
 export type PropertySummary = {
   id: string
@@ -91,6 +92,7 @@ function UnitRow({
   const [creatingLease, setCreatingLease] = useState(false)
   const [invitingFor, setInvitingFor] = useState<string | null>(null)
   const [viewingDoc, setViewingDoc] = useState<Lease | null>(null)
+  const [signing, setSigning] = useState<Record<string, SigningStatus>>({})
   const [error, setError] = useState<string | null>(null)
 
   async function load() {
@@ -100,8 +102,14 @@ function UnitRow({
       // Whether a lease already has someone on it decides between "Invite
       // tenant" and just showing the count.
       const counts: Record<string, number> = {}
-      for (const l of ls) counts[l.id] = (await fetchLeaseTenants(l.id)).length
+      const sigs: Record<string, SigningStatus> = {}
+      for (const l of ls) {
+        counts[l.id] = (await fetchLeaseTenants(l.id)).length
+        const st = await fetchSigningStatus(l.id)
+        if (st) sigs[l.id] = st
+      }
       setTenantCounts(counts)
+      setSigning(sigs)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -116,6 +124,8 @@ function UnitRow({
   if (viewingDoc) {
     return (
       <LeaseDocument
+        signable
+        onSigned={load}
         lease={viewingDoc}
         propertyName={property.name}
         premises={`${property.address_line1}, ${property.city}, ${property.state} ${property.zip}${
@@ -153,9 +163,18 @@ function UnitRow({
               ? `${tenantCounts[activeLease.id]} tenant(s)`
               : 'no tenant yet'}
           </div>
+          <div className="muted">
+            {signing[activeLease.id]?.fully_executed
+              ? 'Lease signed by both parties'
+              : signing[activeLease.id]?.tenant_signed
+                ? 'Tenant has signed — needs your countersignature'
+                : signing[activeLease.id]?.landlord_signed
+                  ? 'You have signed — waiting on the tenant'
+                  : 'Not signed yet'}
+          </div>
           <div style={{ display: 'flex', gap: '1rem' }}>
             <button className="link" onClick={() => setViewingDoc(activeLease)}>
-              View / print lease
+              View / sign lease
             </button>
             {tenantCounts[activeLease.id] === 0 && invitingFor !== activeLease.id && (
               <button className="link" onClick={() => setInvitingFor(activeLease.id)}>

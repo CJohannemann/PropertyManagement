@@ -6,6 +6,8 @@ import {
 } from '../../lib/charges'
 import { fetchRequests, type MaintenanceRequest } from '../../lib/maintenance'
 import { RequestRepair } from '../RequestRepair'
+import { TenantLease } from '../TenantLease'
+import { fetchSigningStatus, type SigningStatus } from '../../lib/signatures'
 
 type Lease = {
   id: string
@@ -26,6 +28,8 @@ export function TenantDashboard({ memberId }: Props) {
   const [charges, setCharges] = useState<ChargeWithPlace[] | null>(null)
   const [requests, setRequests] = useState<MaintenanceRequest[]>([])
   const [reporting, setReporting] = useState(false)
+  const [viewingLease, setViewingLease] = useState(false)
+  const [signing, setSigning] = useState<SigningStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -44,6 +48,15 @@ export function TenantDashboard({ memberId }: Props) {
     loadRequests()
   }, [])
 
+  // Signing status decides whether the dashboard leads with 'read and
+  // sign' or with the balance — a tenant who has not agreed to anything
+  // should not be greeted by a bill.
+  useEffect(() => {
+    if (leases && leases.length > 0) {
+      fetchSigningStatus(leases[0].id).then(setSigning).catch(() => setSigning(null))
+    }
+  }, [leases])
+
   function loadRequests() {
     fetchRequests()
       .then(setRequests)
@@ -57,9 +70,44 @@ export function TenantDashboard({ memberId }: Props) {
     return <p className="empty-state">No lease on file yet.</p>
   }
 
+  if (viewingLease) {
+    return (
+      <TenantLease
+        leaseId={leases[0].id}
+        onBack={() => {
+          setViewingLease(false)
+          fetchSigningStatus(leases[0].id).then(setSigning).catch(() => setSigning(null))
+        }}
+      />
+    )
+  }
+
   const owed = totalOutstanding(charges)
   const overdue = charges.filter(isOverdue)
   const lease = leases[0]
+
+  if (signing && !signing.tenant_signed) {
+    return (
+      <div>
+        <h2>Your lease is waiting for you</h2>
+        <div className="card-list">
+          <div>
+            <p style={{ marginTop: 0 }}>
+              Your landlord has set up your tenancy, but you have not agreed
+              to the lease yet. Read it and, if you are happy with it, sign.
+            </p>
+            <p className="muted">
+              Nothing is agreed until you sign, and you can ask for a paper
+              copy instead.
+            </p>
+            <button className="primary" onClick={() => setViewingLease(true)}>
+              Read and sign the lease
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -143,7 +191,16 @@ export function TenantDashboard({ memberId }: Props) {
         </div>
       )}
 
-      <h2 style={{ marginTop: '2rem' }}>Your lease</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'center', marginTop: '2rem' }}>
+        <h2>Your lease</h2>
+        <button className="link" onClick={() => setViewingLease(true)}>
+          View lease
+        </button>
+      </div>
+      {signing && !signing.landlord_signed && (
+        <p className="muted">Waiting for your landlord to countersign.</p>
+      )}
       <div className="card-list">
         <div>
           <strong>{money(Number(lease.rent_amount))}/month</strong>

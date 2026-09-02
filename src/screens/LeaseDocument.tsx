@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { money } from '../lib/charges'
 import { fetchDefaultTemplate, type TemplateWithClauses } from '../lib/leaseTemplates'
+import { SignLease } from './SignLease'
 import type { Lease } from '../lib/leases'
 
 type Props = {
@@ -11,6 +12,13 @@ type Props = {
   stateCode: string
   organizationName: string
   onClose: () => void
+  /**
+   * Renders the signing panel beneath the document. Off by default: the
+   * same component is used to read a lease back, and an "I agree" button
+   * that appears where it isn't wanted is worse than one that's missing.
+   */
+  signable?: boolean
+  onSigned?: () => void
 }
 
 type PartyRow = { full_name: string | null; is_primary: boolean }
@@ -30,6 +38,7 @@ type PartyRow = { full_name: string | null; is_primary: boolean }
  */
 export function LeaseDocument({
   lease, propertyName, premises, stateCode, organizationName, onClose,
+  signable = false, onSigned,
 }: Props) {
   const [parties, setParties] = useState<PartyRow[] | null>(null)
   const [template, setTemplate] = useState<TemplateWithClauses | null | 'loading'>('loading')
@@ -311,6 +320,20 @@ export function LeaseDocument({
           ))}
         </section>
       </article>
+
+      {signable && (
+        <div className="no-print" style={{ maxWidth: '7.5in', margin: '1.5rem auto' }}>
+          <SignLease
+            leaseId={lease.id}
+            // What was on screen, so the record keeps the document the
+            // person actually read rather than only the data it came from.
+            renderedText={clauses
+              .map((c) => [c.heading, fill(c.body)].join('\n'))
+              .join('\n\n')}
+            onSigned={() => onSigned?.()}
+          />
+        </div>
+      )}
     </div>
   )
 }
