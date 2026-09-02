@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, describeError } from '../../lib/supabase'
 import { PropertyDetail, type PropertySummary } from '../PropertyDetail'
+import { RentStatus } from '../RentStatus'
 
 type Property = PropertySummary & { units: { id: string }[] }
 
@@ -41,7 +42,10 @@ export function AdminDashboard({ organizationId }: Props) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <h2>Rent status</h2>
+      <RentStatus />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem' }}>
         <h2>Properties</h2>
         <button className="link" onClick={() => setShowForm((s) => !s)}>
           {showForm ? 'Cancel' : '+ Add property'}

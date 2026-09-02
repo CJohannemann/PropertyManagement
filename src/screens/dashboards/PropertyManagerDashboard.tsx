@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, describeError } from '../../lib/supabase'
 import { PropertyDetail, type PropertySummary } from '../PropertyDetail'
+import { RentStatus } from '../RentStatus'
 
 type Property = PropertySummary & { units: { id: string }[] }
 
@@ -37,7 +38,10 @@ export function PropertyManagerDashboard() {
 
   return (
     <div>
-      <h2>Properties</h2>
+      <h2>Rent status</h2>
+      <RentStatus />
+
+      <h2 style={{ marginTop: '2rem' }}>Properties</h2>
       {error && <p className="error-text">{error}</p>}
       {properties === null && !error && <p className="muted">Loading…</p>}
       {properties?.length === 0 && (
