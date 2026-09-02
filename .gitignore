@@ -3,3 +3,17 @@ dist/
 .env
 deploy/selfhost/.env
 deploy/selfhost/data/
+
+# Real documents — signed leases, receipts, statements — must never reach
+# the remote. This repo is on GitHub, and these carry tenant names,
+# signatures, and potentially SSNs or bank details. Ignored by extension
+# rather than by folder because the risk is someone dropping a file in the
+# working directory and a later `git add -A` sweeping it up, which is
+# exactly how this nearly happened.
+#
+# To commit a genuinely non-sensitive document (a blank template, say),
+# override deliberately: git add -f path/to/file.pdf
+*.pdf
+*.docx
+*.xlsx
+/private/
