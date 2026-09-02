@@ -1,15 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase, describeError } from '../../lib/supabase'
+import { PropertyDetail, type PropertySummary } from '../PropertyDetail'
 
-type Property = {
-  id: string
-  name: string
-  address_line1: string
-  city: string
-  state: string
-  zip: string
-  units: { id: string }[]
-}
+type Property = PropertySummary & { units: { id: string }[] }
 
 type Props = { organizationId: string }
 
@@ -17,6 +10,7 @@ export function AdminDashboard({ organizationId }: Props) {
   const [properties, setProperties] = useState<Property[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [selected, setSelected] = useState<PropertySummary | null>(null)
 
   async function load() {
     if (!supabase) return
@@ -30,12 +24,20 @@ export function AdminDashboard({ organizationId }: Props) {
 
   useEffect(() => {
     load()
-    // organizationId isn't used directly in the query — RLS already scopes
-    // `properties` to the caller's org — but it's the effect's real
-    // dependency conceptually (a different org's admin sees different
-    // rows), so it's listed here for correctness even though the query
-    // itself doesn't reference it.
+    // organizationId isn't in the query — RLS already scopes `properties`
+    // to the caller's org — but a different org's admin sees different
+    // rows, so it's the effect's real dependency.
   }, [organizationId])
+
+  if (selected) {
+    return (
+      <PropertyDetail
+        property={selected}
+        canManageUnits
+        onBack={() => { setSelected(null); load() }}
+      />
+    )
+  }
 
   return (
     <div>
@@ -47,27 +49,18 @@ export function AdminDashboard({ organizationId }: Props) {
       </div>
 
       {showForm && (
-        <AddPropertyForm
-          onAdded={() => {
-            setShowForm(false)
-            load()
-          }}
-        />
+        <AddPropertyForm onAdded={() => { setShowForm(false); load() }} />
       )}
 
       {error && <p className="error-text">{error}</p>}
-
       {properties === null && !error && <p className="muted">Loading…</p>}
-
       {properties?.length === 0 && (
-        <p className="empty-state">
-          No properties yet — add your first one above.
-        </p>
+        <p className="empty-state">No properties yet — add your first one above.</p>
       )}
 
       <div className="card-list">
         {properties?.map((p) => (
-          <div key={p.id}>
+          <div key={p.id} onClick={() => setSelected(p)} style={{ cursor: 'pointer' }}>
             <strong>{p.name}</strong>
             <div className="muted">
               {p.address_line1}, {p.city}, {p.state} {p.zip}
@@ -115,12 +108,8 @@ function AddPropertyForm({ onAdded }: { onAdded: () => void }) {
         </div>
         <div className="field">
           <label htmlFor="p-addr">Address</label>
-          <input
-            id="p-addr"
-            required
-            value={addressLine1}
-            onChange={(e) => setAddressLine1(e.target.value)}
-          />
+          <input id="p-addr" required value={addressLine1}
+            onChange={(e) => setAddressLine1(e.target.value)} />
         </div>
         <div className="field">
           <label htmlFor="p-city">City</label>
@@ -128,13 +117,8 @@ function AddPropertyForm({ onAdded }: { onAdded: () => void }) {
         </div>
         <div className="field">
           <label htmlFor="p-state">State (2-letter)</label>
-          <input
-            id="p-state"
-            required
-            maxLength={2}
-            value={state}
-            onChange={(e) => setState(e.target.value)}
-          />
+          <input id="p-state" required maxLength={2} value={state}
+            onChange={(e) => setState(e.target.value)} />
         </div>
         <div className="field">
           <label htmlFor="p-zip">ZIP</label>

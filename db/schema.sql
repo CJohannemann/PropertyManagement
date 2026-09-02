@@ -467,9 +467,15 @@ $fn$;
 revoke all on function create_organization(text) from public;
 grant execute on function create_organization(text) to authenticated;
 
+-- search_path names `extensions` as well as `public` because this needs
+-- pgcrypto's gen_random_bytes, and the supabase/postgres image installs
+-- pgcrypto into an `extensions` schema while a plain Postgres install puts
+-- it in `public`. Naming both works on either. (gen_random_uuid(), used
+-- for every table default above, is Postgres core rather than pgcrypto and
+-- needs none of this.) See db/migrations/001_invite_token_search_path.sql.
 create or replace function create_invite(invite_email text, wanted_role org_role, wanted_lease_id uuid default null)
 returns table(token text, expires_at timestamptz)
-language plpgsql security definer set search_path = public as $fn$
+language plpgsql security definer set search_path = public, extensions as $fn$
 declare
   caller org_members%rowtype;
   new_token text;
