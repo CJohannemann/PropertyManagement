@@ -53,7 +53,10 @@ export function AdminDashboard({ organizationId }: Props) {
       </div>
 
       {showForm && (
-        <AddPropertyForm onAdded={() => { setShowForm(false); load() }} />
+        <AddPropertyForm
+          organizationId={organizationId}
+          onAdded={() => { setShowForm(false); load() }}
+        />
       )}
 
       {error && <p className="error-text">{error}</p>}
@@ -77,7 +80,9 @@ export function AdminDashboard({ organizationId }: Props) {
   )
 }
 
-function AddPropertyForm({ onAdded }: { onAdded: () => void }) {
+function AddPropertyForm(
+  { organizationId, onAdded }: { organizationId: string; onAdded: () => void },
+) {
   const [name, setName] = useState('')
   const [addressLine1, setAddressLine1] = useState('')
   const [city, setCity] = useState('')
@@ -91,7 +96,12 @@ function AddPropertyForm({ onAdded }: { onAdded: () => void }) {
     if (!supabase) return
     setBusy(true)
     setError(null)
+    // organization_id must be set explicitly: it's NOT NULL, and the
+    // properties_write policy checks has_org_role(organization_id, admin) —
+    // so omitting it fails as "new row violates row-level security policy"
+    // rather than as the missing-column error it actually is.
     const { error } = await supabase.from('properties').insert({
+      organization_id: organizationId,
       name,
       address_line1: addressLine1,
       city,
