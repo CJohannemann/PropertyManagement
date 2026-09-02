@@ -27,9 +27,11 @@ export function Dashboard() {
           navigate('/setup', { replace: true })
           return
         }
-        // A user with more than one active membership (multi-org, future
-        // multi-landlord case) just sees the first one for now — an org
-        // switcher is a real feature to build later, not a v1 concern.
+        // fetchMyMemberships sorts most-privileged first, so this lands on
+        // the admin view for someone who is also a tenant somewhere rather
+        // than on whichever row the database returned first. An org
+        // switcher is still a real feature for later; deterministic
+        // ordering is the part that had to exist now.
         const m = rows[0]
         setMembership(m)
         setOrgName(await fetchOrganizationName(m.organization_id))

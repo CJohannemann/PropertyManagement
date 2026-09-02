@@ -10,10 +10,24 @@ export type Membership = {
 }
 
 /**
+ * Most privileged first. Which membership the app picks decides which
+ * dashboard someone lands on, and picking whichever row the database
+ * happened to return first meant an owner could open the app and be shown
+ * the tenant view — with a rent balance — because of row order.
+ */
+const ROLE_RANK: Record<OrgRole, number> = {
+  admin: 0, property_manager: 1, technician: 2, tenant: 3,
+}
+
+/**
  * The signed-in user's own org_members row(s) — RLS always allows reading
  * your own row (see db/schema.sql's org_members_read policy), no matter
  * what org or role it is. An empty array means a brand-new account with no
  * organization yet, which is what routes them to /setup.
+ *
+ * Sorted by privilege, so a person who holds more than one role (across
+ * organizations, or through some future arrangement) lands somewhere
+ * deterministic rather than somewhere arbitrary.
  */
 export async function fetchMyMemberships(): Promise<Membership[]> {
   if (!supabase) return []
@@ -22,7 +36,7 @@ export async function fetchMyMemberships(): Promise<Membership[]> {
     .select('id, organization_id, role, status')
     .eq('status', 'active')
   if (error) throw error
-  return data ?? []
+  return (data ?? []).sort((a, b) => ROLE_RANK[a.role] - ROLE_RANK[b.role])
 }
 
 export async function fetchOrganizationName(orgId: string): Promise<string> {
