@@ -10,10 +10,32 @@ type Props = {
   onCancel: () => void
 }
 
+/**
+ * The end date of a standard 12-month term: a lease starting 2026-09-01
+ * runs through 2027-08-31, not 2027-09-01 — the last day of the twelfth
+ * month, not the first day of the thirteenth.
+ *
+ * Built in UTC and from the date's own parts rather than by parsing the
+ * string as local time, which shifts the day backwards for anyone west of
+ * UTC and would quietly hand them a lease ending a day early. A start of
+ * Feb 29 lands on Feb 28 the following year, which is the right answer.
+ */
+function oneYearTerm(startIso: string): string {
+  const [y, m, d] = startIso.split('-').map(Number)
+  if (!y || !m || !d) return ''
+  const end = new Date(Date.UTC(y + 1, m - 1, d))
+  end.setUTCDate(end.getUTCDate() - 1)
+  return end.toISOString().slice(0, 10)
+}
+
 export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
   const [reg, setReg] = useState<StateRegulation | null | 'loading'>('loading')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  // Once the end date has been set by hand, changing the start date must
+  // not silently overwrite it — the auto-fill is a convenience, and
+  // clobbering a deliberate entry is worse than not filling it at all.
+  const [endDateEdited, setEndDateEdited] = useState(false)
   const [rentAmount, setRentAmount] = useState('')
   const [rentDueDay, setRentDueDay] = useState('1')
   const [depositAmount, setDepositAmount] = useState('')
@@ -90,12 +112,19 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
         <div className="field">
           <label htmlFor="l-start">Start date</label>
           <input id="l-start" type="date" required value={startDate}
-            onChange={(e) => setStartDate(e.target.value)} />
+            onChange={(e) => {
+              const v = e.target.value
+              setStartDate(v)
+              if (!endDateEdited) setEndDate(v ? oneYearTerm(v) : '')
+            }} />
         </div>
         <div className="field">
           <label htmlFor="l-end">End date (optional)</label>
           <input id="l-end" type="date" value={endDate}
-            onChange={(e) => setEndDate(e.target.value)} />
+            onChange={(e) => { setEndDateEdited(true); setEndDate(e.target.value) }} />
+          <span className="muted">
+            Defaults to a 12-month term. Clear it for a month-to-month lease.
+          </span>
         </div>
         <div className="field">
           <label htmlFor="l-rent">Monthly rent ($)</label>

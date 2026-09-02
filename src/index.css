@@ -55,3 +55,25 @@ button, input, select, textarea {
   font: inherit;
   color: inherit;
 }
+
+/*
+ * Hide the up/down spinners on number fields — tiny hit targets, and the
+ * numbers here (rent, mileage, square feet) are typed rather than dialled
+ * one step at a time. `appearance` covers current browsers; the -webkit-
+ * and -moz- rules cover older ones that still need them.
+ *
+ * This only removes the buttons. Scroll-wheel-over-a-focused-field still
+ * changes the value, which CSS cannot prevent — see the wheel guard in
+ * main.tsx for that half.
+ */
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
