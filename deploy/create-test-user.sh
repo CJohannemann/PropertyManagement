@@ -3,11 +3,12 @@
 # Creates a confirmed account and puts it in an organization with a role,
 # for testing each role's view without needing a real mailbox per role.
 #
-#   bash deploy/create-test-user.sh <email> <password> <role> [full name]
+#   bash deploy/create-test-user.sh <email> <password> <role> [full name] [lease id]
 #
-#   bash deploy/create-test-user.sh admin@example.com 'S0meth1ng-Better' admin
-#   bash deploy/create-test-user.sh pm@example.com    'S0meth1ng-Better' property_manager
-#   bash deploy/create-test-user.sh tech@example.com  'S0meth1ng-Better' technician
+#   bash deploy/create-test-user.sh admin@example.com  pw admin
+#   bash deploy/create-test-user.sh pm@example.com     pw property_manager
+#   bash deploy/create-test-user.sh tech@example.com   pw technician
+#   bash deploy/create-test-user.sh renter@example.com pw tenant 'Test Renter'
 #
 # Roles: admin | property_manager | technician | tenant
 #
@@ -16,11 +17,17 @@
 # invite. Both are right for real users and both are in the way when you
 # want to look at the technician view for thirty seconds.
 #
+# A tenant is attached to a lease, since a tenant without one only ever
+# sees "no lease on file". With exactly one active lease it is picked
+# automatically; with several, pass the id as the fifth argument and the
+# script lists them.
+#
+# A technician is granted access to every property, for the same reason:
+# access defaults to none, so an unscoped technician sees no jobs at all
+# and the role looks broken rather than empty.
+#
 # Accounts made here are real and confirmed, and can sign in from
 # anywhere. Remove them with deploy/delete-test-users.sh.
-#
-# A tenant account is not attached to any lease; that is the useful case
-# for testing the "no lease yet" screen. Use a real invite for the rest.
 
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,6 +37,7 @@ EMAIL="${1:-}"
 PASSWORD="${2:-}"
 ROLE="${3:-}"
 FULL_NAME="${4:-}"
+LEASE_ID="${5:-}"
 
 if [ -z "$EMAIL" ] || [ -z "$PASSWORD" ] || [ -z "$ROLE" ]; then
   echo "Usage: bash deploy/create-test-user.sh <email> <password> <role> [full name]" >&2
@@ -119,9 +127,62 @@ psql_in "insert into org_members (organization_id, user_id, role, status, full_n
            do update set role = excluded.role, status = 'active';" \
   -v org="$ORG_ID" -v uid="$USER_ID" -v role="$ROLE" -v nm="$FULL_NAME" > /dev/null
 
+MEMBER_ID="$(psql_in "select id from org_members
+                       where organization_id = :'org' and user_id = :'uid';" \
+  -v org="$ORG_ID" -v uid="$USER_ID")"
+
+ATTACHED=""
+
+# A technician with no property access sees no jobs, because access
+# defaults to none. That is the right default for a real technician and
+# makes a test one look broken, so grant everything: a null property_id
+# means "all properties" (see db/schema.sql).
+if [ "$ROLE" = "technician" ]; then
+  psql_in "insert into technician_property_access (org_member_id, property_id)
+           values (:'m', null) on conflict do nothing;" -v m="$MEMBER_ID" > /dev/null
+  ATTACHED="access to all properties"
+fi
+
+if [ "$ROLE" = "tenant" ]; then
+  if [ -z "$LEASE_ID" ]; then
+    LEASE_COUNT="$(psql -c "select count(*) from leases where status = 'active';")"
+    if [ "$LEASE_COUNT" = "0" ]; then
+      ATTACHED="no lease — create one first, then re-run to attach them"
+    elif [ "$LEASE_COUNT" = "1" ]; then
+      LEASE_ID="$(psql -c "select id from leases where status = 'active' limit 1;")"
+    else
+      echo
+      echo "There is more than one active lease, so pick which one this renter is on"
+      echo "and pass its id as the fifth argument:"
+      docker compose exec -T db psql -U postgres -d postgres -c \
+        "select l.id, p.name as property, u.label as unit, l.rent_amount
+           from leases l join units u on u.id = l.unit_id
+           join properties p on p.id = u.property_id
+          where l.status = 'active';"
+      exit 1
+    fi
+  fi
+
+  if [ -n "$LEASE_ID" ]; then
+    # is_primary only when nobody else holds it, so adding a second test
+    # renter to a lease makes a roommate rather than a second primary.
+    psql_in "insert into lease_tenants (lease_id, org_member_id, is_primary)
+             select :'l', :'m',
+                    not exists (select 1 from lease_tenants
+                                 where lease_id = :'l' and is_primary)
+             on conflict (lease_id, org_member_id) do nothing;" \
+      -v l="$LEASE_ID" -v m="$MEMBER_ID" > /dev/null
+    ATTACHED="$(psql_in "select p.name || ' · ' || u.label
+                           from leases l join units u on u.id = l.unit_id
+                           join properties p on p.id = u.property_id
+                          where l.id = :'l';" -v l="$LEASE_ID")"
+  fi
+fi
+
 echo
 echo "Done."
 echo "  sign in with: $EMAIL"
 echo "  role:         $ROLE"
+[ -n "$ATTACHED" ] && echo "  attached to:  $ATTACHED"
 echo
 echo "Delete it again with: bash deploy/delete-test-users.sh"
