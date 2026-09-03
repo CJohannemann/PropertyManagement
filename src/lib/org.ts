@@ -20,20 +20,32 @@ const ROLE_RANK: Record<OrgRole, number> = {
 }
 
 /**
- * The signed-in user's own org_members row(s) — RLS always allows reading
- * your own row (see db/schema.sql's org_members_read policy), no matter
- * what org or role it is. An empty array means a brand-new account with no
- * organization yet, which is what routes them to /setup.
+ * The signed-in user's own org_members row(s). An empty array means a
+ * brand-new account with no organization yet, which routes them to /setup.
  *
- * Sorted by privilege, so a person who holds more than one role (across
- * organizations, or through some future arrangement) lands somewhere
- * deterministic rather than somewhere arbitrary.
+ * The user_id filter is load-bearing and must not be dropped as
+ * redundant-looking. RLS does NOT restrict this table to your own row: an
+ * admin or property manager is deliberately allowed to read the whole
+ * roster, because managing people requires seeing them. Leaving the filter
+ * off returned every active member of the organization, and the sort below
+ * then handed a property manager the *admin's* row — showing them the
+ * admin dashboard, under the admin's membership id, so anything they
+ * created would have been attributed to the admin.
+ *
+ * Sorted most-privileged first so someone holding roles in more than one
+ * organization lands somewhere deterministic rather than on whichever row
+ * came back first.
  */
 export async function fetchMyMemberships(): Promise<Membership[]> {
   if (!supabase) return []
+  const { data: auth } = await supabase.auth.getUser()
+  const userId = auth.user?.id
+  if (!userId) return []
+
   const { data, error } = await supabase
     .from('org_members')
     .select('id, organization_id, role, status')
+    .eq('user_id', userId)
     .eq('status', 'active')
   if (error) throw error
   return (data ?? []).sort((a, b) => ROLE_RANK[a.role] - ROLE_RANK[b.role])
