@@ -16,20 +16,11 @@
 # invite. Both are right for real users and both are in the way when you
 # want to look at the technician view for thirty seconds.
 #
-# ─────────────────────────────────────────────────────────────────────
-#  THESE ARE TEST ACCOUNTS ON A PUBLICLY REACHABLE SITE.
+# Accounts made here are real and confirmed, and can sign in from
+# anywhere. Remove them with deploy/delete-test-users.sh.
 #
-#  Every account made here is real, confirmed, and can sign in from
-#  anywhere. An admin account with a guessable password is a way into
-#  every lease, tenant name and rent record in the system — so before real
-#  tenant data lands, delete them:
-#
-#    bash deploy/delete-test-users.sh
-#
-#  A tenant account also needs a lease to be attached to; this script does
-#  not do that, since a tenant with no lease is exactly what you want for
-#  testing the "no lease yet" screen. Use a real invite for the rest.
-# ─────────────────────────────────────────────────────────────────────
+# A tenant account is not attached to any lease; that is the useful case
+# for testing the "no lease yet" screen. Use a real invite for the rest.
 
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -57,22 +48,14 @@ if [ ! -f .env ]; then
 fi
 set -a; source .env; set +a
 
-# Warn rather than refuse: it is the operator's system, and a bad password
-# on a throwaway account is a judgement call. Silence would not be.
-if [ "${#PASSWORD}" -lt 12 ] || printf '%s' "$PASSWORD" | grep -qiE '^(password|test|admin|letmein|123)'; then
-  echo "WARNING: that password is short or guessable, and this account will be" >&2
-  echo "         reachable from the public internet. Fine for today; delete it" >&2
-  echo "         before real tenant data exists (deploy/delete-test-users.sh)." >&2
-  echo >&2
-fi
-
 # Values are passed as psql variables and referenced with :'name', never
 # interpolated into the SQL string. Two traps behind that:
 #
-#   * `$`-quoting cannot be used here at all — bash expands $ to its own
-#     PID before psql sees it, producing SQL reading `34807admin@...`.
-#   * psql does NOT expand :'vars' in a -c string, only in SQL it reads
-#     from stdin. Same command, silently different behaviour.
+#   * Postgres dollar-quoting cannot be used here at all: bash expands a
+#     bare double-dollar to its own PID before psql ever sees it, which
+#     produced SQL reading `34807admin@example.com34807`.
+#   * psql does NOT expand :'vars' given in a -c string, only in SQL it
+#     reads from stdin. Same command, silently different behaviour.
 psql() {
   docker compose exec -T db psql -U postgres -d postgres -qtAX "$@"
 }
@@ -80,8 +63,8 @@ psql() {
 # SQL on stdin, values as -v variables.
 psql_in() {
   local sql="$1"; shift
-  printf '%s
-' "$sql" | docker compose exec -T db     psql -U postgres -d postgres -qtAX "$@"
+  printf '%s\n' "$sql" \
+    | docker compose exec -T db psql -U postgres -d postgres -qtAX "$@"
 }
 
 # Created through GoTrue's admin API rather than by writing to auth.users
@@ -133,7 +116,8 @@ fi
 psql_in "insert into org_members (organization_id, user_id, role, status, full_name)
          values (:'org', :'uid', :'role'::org_role, 'active', nullif(:'nm', ''))
          on conflict (organization_id, user_id)
-           do update set role = excluded.role, status = 'active';"   -v org="$ORG_ID" -v uid="$USER_ID" -v role="$ROLE" -v nm="$FULL_NAME" > /dev/null
+           do update set role = excluded.role, status = 'active';" \
+  -v org="$ORG_ID" -v uid="$USER_ID" -v role="$ROLE" -v nm="$FULL_NAME" > /dev/null
 
 echo
 echo "Done."
