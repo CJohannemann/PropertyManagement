@@ -4,6 +4,7 @@ import { PropertyDetail, type PropertySummary } from '../PropertyDetail'
 import { RentStatus } from '../RentStatus'
 import { LeaseTemplates } from '../LeaseTemplates'
 import { MaintenanceRequests } from '../MaintenanceRequests'
+import { GettingPaid } from '../GettingPaid'
 
 type Property = PropertySummary & { units: { id: string }[] }
 
@@ -57,6 +58,10 @@ export function AdminDashboard({ organizationId, organizationName, memberId }: P
     <div>
       <h2>Rent status</h2>
       <RentStatus />
+
+      <div style={{ marginTop: '2rem' }}>
+        <GettingPaid organizationId={organizationId} />
+      </div>
 
       <div style={{ marginTop: '2rem' }}>
         <MaintenanceRequests organizationId={organizationId} memberId={memberId} />

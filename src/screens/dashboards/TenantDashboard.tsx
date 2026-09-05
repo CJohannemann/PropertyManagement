@@ -7,6 +7,8 @@ import {
 import { fetchRequests, type MaintenanceRequest } from '../../lib/maintenance'
 import { RequestRepair } from '../RequestRepair'
 import { TenantLease } from '../TenantLease'
+import { PayRent } from '../PayRent'
+import { stripeConfigured } from '../../lib/payments'
 import { fetchSigningStatus, type SigningStatus } from '../../lib/signatures'
 
 type Lease = {
@@ -28,6 +30,7 @@ export function TenantDashboard({ memberId }: Props) {
   const [charges, setCharges] = useState<ChargeWithPlace[] | null>(null)
   const [requests, setRequests] = useState<MaintenanceRequest[]>([])
   const [reporting, setReporting] = useState(false)
+  const [paying, setPaying] = useState<ChargeWithPlace | null>(null)
   const [viewingLease, setViewingLease] = useState(false)
   const [signing, setSigning] = useState<SigningStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -63,11 +66,32 @@ export function TenantDashboard({ memberId }: Props) {
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
   }
 
+  function loadCharges() {
+    fetchCharges()
+      .then(setCharges)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+  }
+
   if (error) return <p className="error-text">{error}</p>
   if (leases === null || charges === null) return <p className="muted">Loading…</p>
 
   if (leases.length === 0) {
     return <p className="empty-state">No lease on file yet.</p>
+  }
+
+  if (paying) {
+    return (
+      <PayRent
+        charge={paying}
+        onDone={() => {
+          setPaying(null)
+          // An ACH payment is only 'processing' at this point, so the
+          // balance won't have moved — but a failed start might have, and
+          // re-reading is cheaper than reasoning about which.
+          loadCharges()
+        }}
+      />
+    )
   }
 
   if (viewingLease) {
@@ -124,11 +148,12 @@ export function TenantDashboard({ memberId }: Props) {
           ) : (
             <div className="muted">Nothing overdue.</div>
           )}
-          {/* Payments aren't wired up yet — saying so is better than a
-              button that does nothing, or silence where one should be. */}
-          <p className="muted" style={{ marginTop: '0.75rem', marginBottom: 0 }}>
-            Online payment is coming soon — pay as you do today for now.
-          </p>
+          {owed > 0 && !stripeConfigured && (
+            <p className="muted" style={{ marginTop: '0.75rem', marginBottom: 0 }}>
+              Online payment isn't available here yet — pay as you do today
+              for now.
+            </p>
+          )}
         </div>
       </div>
 
@@ -152,6 +177,12 @@ export function TenantDashboard({ memberId }: Props) {
                 {Number(c.amount_paid) > 0 && ` · ${money(Number(c.amount_paid))} paid`}
                 {outstanding(c) > 0 && ` · ${money(outstanding(c))} left`}
               </div>
+              {stripeConfigured && outstanding(c) > 0 && (
+                <button className="link" onClick={() => setPaying(c)}
+                  style={{ marginTop: '0.5rem' }}>
+                  Pay {money(outstanding(c))}
+                </button>
+              )}
             </div>
           ))}
         </div>

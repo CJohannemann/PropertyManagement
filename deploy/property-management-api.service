@@ -1,0 +1,23 @@
+[Unit]
+Description=PropertyManagement payments API (Stripe Connect and rent payments)
+# Postgres runs in Docker; without this the API starts before the database
+# exists on a reboot and dies on its first query.
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/PropertyManagement
+ExecStart=/usr/bin/env bash deploy/api.sh
+
+# This process handles money. If it dies it must come back, and it must not
+# be so eager about it that a genuine misconfiguration turns into a restart
+# loop that buries the error in the journal.
+Restart=always
+RestartSec=5s
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target
