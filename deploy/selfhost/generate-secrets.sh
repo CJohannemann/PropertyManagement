@@ -21,6 +21,14 @@ set_kv() {
     echo "$key already set in .env — leaving it alone."
     return
   fi
+  # An .env created before this key existed has no line to replace, and a
+  # sed that matches nothing still succeeds — so this would report "set."
+  # having set nothing, and the feature would be quietly dead. Append.
+  if ! grep -q "^${key}=" .env; then
+    printf '%s=%s\n' "$key" "$value" >> .env
+    echo "$key added."
+    return
+  fi
   # | as the sed delimiter, not the more usual / — these values (hex,
   # base64, base64url) can themselves contain a literal /.
   sed -i "s|^${key}=.*|${key}=${value}|" .env
