@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, errorMessage } from '../lib/supabase'
 import { fetchSigningStatus, type SigningStatus } from '../lib/signatures'
 import { LeaseDocument } from './LeaseDocument'
 import type { Lease } from '../lib/leases'
@@ -59,7 +59,7 @@ export function TenantLease({ leaseId, onBack }: Props) {
       })
       setStatus(await fetchSigningStatus(leaseId))
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
     }
   }
 

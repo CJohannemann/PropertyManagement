@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, errorMessage } from '../lib/supabase'
 import { money } from '../lib/charges'
 import { fetchDefaultTemplate, type TemplateWithClauses } from '../lib/leaseTemplates'
 import { SignLease } from './SignLease'
@@ -69,7 +69,7 @@ export function LeaseDocument({
       .then(setTemplate)
       .catch((e) => {
         setTemplate(null)
-        setTemplateError(e instanceof Error ? e.message : String(e))
+        setTemplateError(errorMessage(e))
       })
   }, [])
 

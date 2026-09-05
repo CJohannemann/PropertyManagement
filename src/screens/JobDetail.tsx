@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import {
   fetchJobEntries, addJobEntry, fetchJobTotals, setJobStatus,
@@ -32,7 +33,7 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
       ])
       setEntries(e); setTotals(t); setReceipts(r)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(errorMessage(e))
     }
   }
 
@@ -164,7 +165,7 @@ function ReceiptUpload({
             await uploadReceipt(jobId, file)
             onUploaded()
           } catch (err) {
-            onError(err instanceof Error ? err.message : String(err))
+            onError(errorMessage(err))
           }
           setBusy(false)
           e.target.value = ''
@@ -205,7 +206,7 @@ function AddEntry({
       setDescription(''); setHours(''); setMiles(''); setCost(''); setVendor('')
       onAdded()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
     }
     setBusy(false)
   }

@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import {
   fetchDefaultTemplate, createTemplate, updateClause, deleteClause, addClause,
@@ -18,7 +19,7 @@ export function LeaseTemplates({ organizationId, onBack }: Props) {
     try {
       setTemplate(await fetchDefaultTemplate())
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(errorMessage(e))
       setTemplate(null)
     }
   }
@@ -38,7 +39,7 @@ export function LeaseTemplates({ organizationId, onBack }: Props) {
       )
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(errorMessage(e))
     }
     setBusy(false)
   }
@@ -56,7 +57,7 @@ export function LeaseTemplates({ organizationId, onBack }: Props) {
       setPasting(false)
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(errorMessage(e))
     }
     setBusy(false)
   }
@@ -136,7 +137,7 @@ export function LeaseTemplates({ organizationId, onBack }: Props) {
           await addClause(template.id, template.clauses.length, 'New clause', '')
           await load()
         } catch (e) {
-          setError(e instanceof Error ? e.message : String(e))
+          setError(errorMessage(e))
         }
       }}>
         + Add clause
@@ -211,7 +212,7 @@ function ClauseEditor({
             await updateClause(clause.id, { heading, body })
             onChanged()
           } catch (e) {
-            onError(e instanceof Error ? e.message : String(e))
+            onError(errorMessage(e))
           }
           setSaving(false)
         }}>
@@ -222,7 +223,7 @@ function ClauseEditor({
             await deleteClause(clause.id)
             onChanged()
           } catch (e) {
-            onError(e instanceof Error ? e.message : String(e))
+            onError(errorMessage(e))
           }
         }}>
           Delete

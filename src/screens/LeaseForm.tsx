@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import { createLease, UTILITY_NAMES } from '../lib/leases'
 import { fetchStateRegulation, type StateRegulation } from '../lib/regulations'
@@ -65,7 +66,7 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
           if (r.tenant_paid_processing_fee_allowed === true) setFeePayer('tenant')
         }
       })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e) => setError(errorMessage(e)))
   }, [stateCode])
 
   const verified = reg !== 'loading' && reg !== null
@@ -139,7 +140,7 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
       })
       onCreated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
       setBusy(false)
     }
   }

@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useState } from 'react'
 import { createOrganization } from '../lib/org'
 import { navigate } from '../lib/route'
@@ -16,7 +17,7 @@ export function Setup() {
       await createOrganization(name)
       navigate('/dashboard', { replace: true })
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
       setBusy(false)
     }
   }

@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import {
   fetchCharges, outstanding, totalOutstanding, isOverdue, statusLabel, money, chargeLabel,
@@ -27,7 +28,7 @@ export function RentStatus() {
   function reload() {
     fetchCharges()
       .then(setCharges)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e) => setError(errorMessage(e)))
   }
 
   useEffect(() => { reload() }, [])
@@ -217,7 +218,7 @@ function PaymentLine({
               await voidManualPayment(payment.id)
               onChanged()
             } catch (e) {
-              onError(e instanceof Error ? e.message : String(e))
+              onError(errorMessage(e))
               setBusy(false)
             }
           }}

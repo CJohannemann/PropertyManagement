@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import {
@@ -22,7 +23,7 @@ export function PayRent({ charge, onDone }: Props) {
   useEffect(() => {
     createPaymentIntent(charge.id)
       .then(setIntent)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e) => setError(errorMessage(e)))
   }, [charge.id])
 
   if (!stripeConfigured) {

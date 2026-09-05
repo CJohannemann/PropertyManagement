@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useState } from 'react'
 import {
   recordManualPayment, outstanding, money, chargeLabel, PAYMENT_METHODS,
@@ -44,7 +45,7 @@ export function RecordPayment({ charge, onRecorded, onCancel }: Props) {
     } catch (err) {
       // The database refuses an overpayment with the figure actually
       // outstanding, which is more use than anything this form could say.
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
       setBusy(false)
     }
   }

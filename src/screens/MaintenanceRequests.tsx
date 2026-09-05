@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, errorMessage } from '../lib/supabase'
 import {
   fetchRequests, createJobFromRequest, fetchJobs,
   listRequestPhotos, requestPhotoUrl,
@@ -37,7 +37,7 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
         .eq('status', 'active')
       setTechnicians((data ?? []) as Technician[])
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(errorMessage(e))
     }
   }
 
@@ -180,7 +180,7 @@ function AssignForm({
         } catch (err) {
           // The database refuses a technician who has no access to the
           // property — they would be handed a job they cannot open.
-          onError(err instanceof Error ? err.message : String(err))
+          onError(errorMessage(err))
           setBusy(false)
         }
       }}

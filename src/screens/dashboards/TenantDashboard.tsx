@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase, describeError } from '../../lib/supabase'
+import { supabase, describeError, errorMessage } from '../../lib/supabase'
 import {
   fetchCharges, outstanding, totalOutstanding, isOverdue, statusLabel, money, chargeLabel,
   methodLabel,
@@ -48,7 +48,7 @@ export function TenantDashboard({ memberId }: Props) {
       })
     fetchCharges()
       .then(setCharges)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e) => setError(errorMessage(e)))
     loadRequests()
   }, [])
 
@@ -64,13 +64,13 @@ export function TenantDashboard({ memberId }: Props) {
   function loadRequests() {
     fetchRequests()
       .then(setRequests)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e) => setError(errorMessage(e)))
   }
 
   function loadCharges() {
     fetchCharges()
       .then(setCharges)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e) => setError(errorMessage(e)))
   }
 
   if (error) return <p className="error-text">{error}</p>

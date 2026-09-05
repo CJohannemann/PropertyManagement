@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, errorMessage } from '../lib/supabase'
 import { fetchMyMemberships, fetchOrganizationName, type Membership } from '../lib/org'
 import { navigate } from '../lib/route'
 import { pushSupported, pushPermission, enablePushNotifications } from '../lib/push'
@@ -37,7 +37,7 @@ export function Dashboard() {
         setMembership(m)
         setOrgName(await fetchOrganizationName(m.organization_id))
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err) => setError(errorMessage(err)))
   }, [])
 
   async function signOut() {
@@ -132,7 +132,7 @@ function NotificationsToggle({ memberId }: { memberId: string }) {
             await enablePushNotifications(memberId)
             setPermission(pushPermission())
           } catch (err) {
-            setError(err instanceof Error ? err.message : String(err))
+            setError(errorMessage(err))
           }
           setBusy(false)
         }}

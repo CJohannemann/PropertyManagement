@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import {
   fetchRentSummary, monthLabel, collectionRate, type RentMonth,
@@ -22,10 +23,22 @@ export function RentOverview({ organizationId }: Props) {
   useEffect(() => {
     fetchRentSummary(organizationId, 12)
       .then(setMonths)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e) => setError(errorMessage(e)))
   }, [organizationId])
 
-  if (error) return <p className="error-text">{error}</p>
+  // Muted rather than a red banner across the top of the page: this is a
+  // summary of what the rent status below already shows in full, so
+  // failing to load it degrades the dashboard rather than breaking it. The
+  // reason is still printed — a missing function after a deploy says
+  // exactly that, and hiding it would leave someone guessing.
+  if (error) {
+    return (
+      <p className="muted">
+        The rent overview couldn't load, though everything below is current.
+        {' '}({error})
+      </p>
+    )
+  }
   if (months === null) return <p className="muted">Loading…</p>
 
   const billedEver = months.reduce((s, m) => s + m.billed, 0)

@@ -1,3 +1,4 @@
+import { errorMessage } from '../../lib/supabase'
 import { useEffect, useState } from 'react'
 import { fetchJobs, type Job } from '../../lib/maintenance'
 import { JobDetail } from '../JobDetail'
@@ -17,7 +18,7 @@ export function TechnicianDashboard({ memberId }: Props) {
       // instead of showing a stale copy until you navigate away.
       if (selected) setSelected(rows.find((j) => j.id === selected.id) ?? null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(errorMessage(e))
     }
   }
 

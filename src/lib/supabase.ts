@@ -48,3 +48,36 @@ export function describeError(error: {
   if (error.details) parts.push(`details: ${error.details}`)
   return parts.join(' — ')
 }
+
+/**
+ * Anything thrown, as something a person can read.
+ *
+ * The catch blocks in this app used to do
+ *
+ *   e instanceof Error ? e.message : String(e)
+ *
+ * which is right for a thrown Error and useless for everything postgrest-js
+ * throws. Its errors are plain objects — `{ message, details, hint, code }`,
+ * not Error instances — so they fell to `String(e)` and rendered on screen
+ * as the literal text "[object Object]". Reported from real use, where a
+ * missing database function showed up that way: the app had been told
+ * exactly what was wrong and threw the explanation away.
+ *
+ * Falls back to JSON rather than String() for the same reason — an
+ * unrecognised object should still show something diagnosable.
+ */
+export function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message
+  if (e && typeof e === 'object' && 'message' in e
+      && typeof (e as { message: unknown }).message === 'string') {
+    return describeError(e as { message: string; hint?: string | null; details?: string | null })
+  }
+  if (e && typeof e === 'object') {
+    try {
+      return JSON.stringify(e)
+    } catch {
+      return 'An unexpected error occurred.'
+    }
+  }
+  return String(e)
+}

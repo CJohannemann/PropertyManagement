@@ -25,5 +25,20 @@ for f in "${files[@]}"; do
   docker compose exec -T db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$f"
 done
 
+# PostgREST caches the database schema at startup and does not notice a new
+# function or column on its own. Without this, a migration adds
+# rent_summary(), the migration reports success, and the app still gets
+# "Could not find the function in the schema cache" — which looks like the
+# migration silently failed when in fact it worked perfectly.
+#
+# NOTIFY is the zero-downtime way and works when db-channel is enabled
+# (it is, by default). The restart is the belt-and-braces follow-up: this
+# is a manual maintenance step, and a second of API downtime is a fair
+# price for not having to debug a stale cache later.
+echo
+echo "=== reloading PostgREST's schema cache ==="
+docker compose exec -T db psql -U postgres -d postgres -c "notify pgrst, 'reload schema';" >/dev/null
+docker compose restart rest
+
 echo
 echo "All migrations applied."

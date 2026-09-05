@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useState } from 'react'
 import { submitRequest, uploadRequestPhoto, REQUEST_CATEGORIES } from '../lib/maintenance'
 
@@ -29,7 +30,7 @@ export function RequestRepair({ unitId, memberId, onDone }: Props) {
       }
       onDone()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
       setBusy(false)
     }
   }

@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import {
   fetchConnectStatus, createOnboardingLink, stripeConfigured,
@@ -22,7 +23,7 @@ export function GettingPaid({ organizationId }: Props) {
     if (!stripeConfigured) return
     fetchConnectStatus(organizationId)
       .then(setStatus)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e) => setError(errorMessage(e)))
   }, [organizationId])
 
   async function startOnboarding() {
@@ -34,7 +35,7 @@ export function GettingPaid({ organizationId }: Props) {
       // in a window they've likely already closed.
       window.location.href = url
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(errorMessage(e))
       setBusy(false)
     }
   }

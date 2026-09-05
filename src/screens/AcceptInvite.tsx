@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import { useSession } from '../lib/useSession'
 import { acceptInvite } from '../lib/org'
@@ -32,7 +33,7 @@ export function AcceptInvite() {
         setDone(true)
         navigate('/dashboard', { replace: true })
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err) => setError(errorMessage(err)))
   }, [checking, session, token])
 
   if (done) return null

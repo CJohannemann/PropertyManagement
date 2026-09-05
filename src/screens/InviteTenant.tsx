@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useState } from 'react'
 import { createInvite } from '../lib/org'
 
@@ -21,7 +22,7 @@ export function InviteTenant({ leaseId, onDone }: Props) {
       // than one you hand over yourself.
       setLink(`${window.location.origin}/accept-invite?token=${token}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
     }
     setBusy(false)
   }

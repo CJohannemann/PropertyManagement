@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import {
   fetchSignatures, signLease, type LeaseSignature,
@@ -33,7 +34,7 @@ export function SignLease({ leaseId, renderedText, onSigned }: Props) {
     try {
       setSignatures(await fetchSignatures(leaseId))
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(errorMessage(e))
     }
   }
   useEffect(() => { load() }, [leaseId])
@@ -46,7 +47,7 @@ export function SignLease({ leaseId, renderedText, onSigned }: Props) {
       await load()
       onSigned()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
     }
     setBusy(false)
   }

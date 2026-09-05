@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import { fetchUnits, createUnit, type Unit } from '../lib/units'
 import { fetchLeasesForUnit, fetchLeaseTenants, type Lease } from '../lib/leases'
@@ -34,7 +35,7 @@ export function PropertyDetail({
     try {
       setUnits(await fetchUnits(property.id))
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(errorMessage(e))
     }
   }
 
@@ -111,7 +112,7 @@ function UnitRow({
       setTenantCounts(counts)
       setSigning(sigs)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(errorMessage(e))
     }
   }
 
@@ -241,7 +242,7 @@ function AddUnitForm({ propertyId, onAdded }: { propertyId: string; onAdded: () 
       })
       onAdded()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(errorMessage(err))
       setBusy(false)
     }
   }
