@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 #
-# Fills in the four secret values in .env automatically — POSTGRES_PASSWORD,
-# JWT_SECRET, ANON_KEY, SERVICE_ROLE_KEY — instead of generating each by
-# hand and pasting it into nano. Creates .env from .env.example first if it
-# doesn't exist yet. Safe to run more than once: never overwrites a value
-# that's already filled in, so re-running after manually setting one or two
-# of these just fills in whatever's still blank.
+# Fills in the secret values in .env automatically — POSTGRES_PASSWORD,
+# JWT_SECRET, ANON_KEY, SERVICE_ROLE_KEY, VAPID_PUBLIC_KEY,
+# VAPID_PRIVATE_KEY — instead of generating each by hand and pasting it
+# into nano. Creates .env from .env.example first if it doesn't exist yet.
+# Safe to run more than once: never overwrites a value that's already
+# filled in, so re-running after manually setting one or two of these just
+# fills in whatever's still blank.
 #
 #   bash generate-secrets.sh
 
@@ -36,5 +37,17 @@ jwt="$(grep '^JWT_SECRET=' .env | cut -d= -f2-)"
 set_kv ANON_KEY "$(node mint-jwt.mjs "$jwt" anon)"
 set_kv SERVICE_ROLE_KEY "$(node mint-jwt.mjs "$jwt" service_role)"
 
+# The public and private VAPID keys are one keypair, not two independent
+# secrets — generating them separately through set_kv would pair a
+# leftover public key with a freshly generated, unrelated private one. So
+# this only regenerates when neither is set yet, and writes both together.
+if grep -q '^VAPID_PUBLIC_KEY=..*' .env; then
+  echo "VAPID_PUBLIC_KEY already set in .env — leaving the VAPID keypair alone."
+else
+  vapid="$(node generate-vapid-keys.mjs)"
+  set_kv VAPID_PUBLIC_KEY "$(printf '%s' "$vapid" | grep '^VAPID_PUBLIC_KEY=' | cut -d= -f2-)"
+  set_kv VAPID_PRIVATE_KEY "$(printf '%s' "$vapid" | grep '^VAPID_PRIVATE_KEY=' | cut -d= -f2-)"
+fi
+
 echo
-echo "Done — secrets are in .env. SMTP_* can stay blank for now."
+echo "Done — secrets are in .env. SMTP_* and VAPID_SUBJECT can stay blank for now."

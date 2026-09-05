@@ -118,6 +118,97 @@ looks for npm and falls back to sourcing nvm, failing loudly rather than
 quietly doing nothing. A failed run is recorded in the journal and nowhere
 else — check there first.
 
+## Push notifications
+
+A second systemd timer checks every 2 minutes for maintenance requests
+nobody's been alerted to, and pushes a browser notification to that org's
+admin/property managers (whoever has turned notifications on in the app).
+Needs the VAPID keypair in `deploy/selfhost/.env` — `generate-secrets.sh`
+creates it; see that file's header.
+
+```bash
+sudo cp deploy/property-management-notify.service /etc/systemd/system/
+sudo cp deploy/property-management-notify.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now property-management-notify.timer
+```
+
+Useful afterwards:
+
+```bash
+systemctl list-timers property-management-notify.timer   # next run
+journalctl -u property-management-notify.service -f      # watch sends
+sudo systemctl disable --now property-management-notify.timer
+```
+
+With nothing new to send it exits silently, so an empty log is the correct
+result, not a failure. Run it by hand any time:
+
+```bash
+cd ~/PropertyManagement/deploy/selfhost
+bash notify.sh
+```
+
+## Rent payments (the API service)
+
+`server/` is the only application server in this project — everything else
+the browser gets from PostgREST under row-level security. It exists because
+Stripe's secret key must never reach a browser, and webhooks need somewhere
+to land. It runs under systemd on the host (not in Docker) and nginx routes
+`/api/` to it on 127.0.0.1:8003.
+
+**Before it will start**, fill in the `STRIPE_*` values in
+`deploy/selfhost/.env` — see that file's comments for where each comes
+from. The service refuses to boot with any of them missing rather than
+failing later on someone's actual rent payment.
+
+```bash
+sudo cp deploy/property-management-api.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now property-management-api
+```
+
+Check it:
+
+```bash
+curl -s https://properties.farmhandmanager.com/api/health   # {"ok":true,"mode":"test"}
+journalctl -u property-management-api -f
+```
+
+`mode` is the one to watch: `test` means Stripe sandbox keys and no real
+money; `live` means real money. The service logs which one it started in.
+
+### The webhook
+
+The webhook is what actually marks rent paid — Stripe tells us a bank
+transfer settled, and only then does the ledger move. Point a Stripe
+webhook endpoint at:
+
+```
+https://properties.farmhandmanager.com/api/stripe/webhook
+```
+
+subscribed to `payment_intent.processing`, `payment_intent.succeeded`,
+`payment_intent.payment_failed`, `charge.dispute.created`,
+`charge.refunded` and `account.updated`, **with "listen to events on
+connected accounts" enabled** — rent is charged directly on the landlord's
+own Stripe account, so the events originate there rather than on the
+platform account. Without that tick, payments will succeed at Stripe and
+never show as paid here.
+
+### Going live
+
+Deliberately a separate step from deploying code:
+
+1. Complete Stripe's platform verification.
+2. Swap `sk_test_`/`pk_test_` for `sk_live_`/`pk_live_` in
+   `deploy/selfhost/.env`, and add a **live-mode** webhook endpoint (its
+   signing secret differs from the test one).
+3. `bash deploy/link-env.sh && bash deploy/deploy.sh` to rebuild the
+   frontend with the live publishable key.
+4. `sudo systemctl restart property-management-api`, then confirm
+   `/api/health` reports `"mode":"live"`.
+
 ## Security posture
 
 Done:
@@ -137,6 +228,9 @@ Still open:
 
 - **Backups aren't automated.** See `selfhost/README.md`; worth a systemd
   timer before real tenant data lands.
-- **`payments` has no client-facing insert policy**, which is correct —
-  but it means the Stripe webhook handler must run server-side with the
-  service-role key. That service doesn't exist yet.
+- **`payments` has no client-facing insert policy**, which is correct. The
+  Stripe webhook handler in `server/` is now the only writer, connecting
+  to Postgres as a role that bypasses RLS. That makes every query in
+  `server/` security-critical: RLS is not a backstop on that connection,
+  so authority is checked explicitly in SQL on each request. See the
+  header comments in `server/db.mjs` and `server/ledger.mjs`.

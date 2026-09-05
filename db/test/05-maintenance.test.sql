@@ -154,5 +154,31 @@ select assert((select count(*) from maintenance_requests) = 1,
 select assert((select count(*) from job_entries) = 0,
   'a tenant does not see what the repair cost the landlord');
 
+-- ------------------------------------------------ push subscriptions --
+-- send-request-notifications.mjs needs to read across a whole org's
+-- admin/PM subscriptions, but it does that as the postgres superuser
+-- (bypassing RLS entirely, like create-test-user.sh); what RLS actually
+-- has to hold is that one member can never see or touch another's row.
+
+select set_config('request.jwt.uid', '22222222-2222-2222-2222-222222222222', false);
+insert into push_subscriptions (org_member_id, endpoint, p256dh, auth)
+values (:'tech', 'https://push.example.com/tech-endpoint', 'p256dh-key', 'auth-key')
+returning id as tech_sub \gset
+
+select set_config('request.jwt.uid', '33333333-3333-3333-3333-333333333333', false);
+select assert((select count(*) from push_subscriptions) = 0,
+  'a member sees none of another member''s push subscriptions');
+-- A row RLS hides isn't visible to DELETE either, so it matches nothing
+-- and succeeds having done nothing — the check is that the row survives.
+delete from push_subscriptions where id = :'tech_sub';
+select assert_rejected(
+  format('insert into push_subscriptions (org_member_id, endpoint, p256dh, auth)
+          values (%L, %L, %L, %L)', :'tech', 'https://push.example.com/spoofed', 'k', 'a'),
+  'a member cannot create a subscription under someone else''s org_member_id');
+
+select set_config('request.jwt.uid', '22222222-2222-2222-2222-222222222222', false);
+select assert((select count(*) from push_subscriptions) = 1,
+  'a member sees their own push subscription, undeleted by another member''s no-op attempt');
+
 reset role;
 select assert(true, 'maintenance tests completed');

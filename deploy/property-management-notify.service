@@ -1,0 +1,13 @@
+[Unit]
+Description=Send push notifications for new PropertyManagement maintenance requests
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/PropertyManagement/deploy/selfhost
+ExecStart=/usr/bin/env bash notify.sh
+
+[Install]
+WantedBy=multi-user.target

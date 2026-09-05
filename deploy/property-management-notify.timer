@@ -1,0 +1,17 @@
+[Unit]
+Description=Check for unnotified PropertyManagement maintenance requests every 2 minutes
+
+[Timer]
+# First check shortly after boot, then every 2 minutes. A tick with
+# nothing new to send exits immediately, so the steady-state cost of this
+# is negligible.
+OnBootSec=1min
+OnUnitActiveSec=2min
+# Spreads the run a little so it doesn't land at the same instant as the
+# other timers already on this box (property-management-deploy,
+# ibc-backup, farmhand-disk-check).
+RandomizedDelaySec=20s
+Unit=property-management-notify.service
+
+[Install]
+WantedBy=timers.target

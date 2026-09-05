@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchMyMemberships, fetchOrganizationName, type Membership } from '../lib/org'
 import { navigate } from '../lib/route'
+import { pushSupported, pushPermission, enablePushNotifications } from '../lib/push'
 import { AdminDashboard } from './dashboards/AdminDashboard'
 import { PropertyManagerDashboard } from './dashboards/PropertyManagerDashboard'
 import { TechnicianDashboard } from './dashboards/TechnicianDashboard'
@@ -71,9 +72,14 @@ export function Dashboard() {
           <strong>{orgName}</strong>
           <div className="role-badge">{ROLE_LABEL[membership.role]}</div>
         </div>
-        <button className="link" onClick={signOut}>
-          Sign out
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {(membership.role === 'admin' || membership.role === 'property_manager') && (
+            <NotificationsToggle memberId={membership.id} />
+          )}
+          <button className="link" onClick={signOut}>
+            Sign out
+          </button>
+        </div>
       </header>
       <main className="app-main">
         {membership.role === 'admin' && (
@@ -95,6 +101,45 @@ export function Dashboard() {
         )}
         {membership.role === 'tenant' && <TenantDashboard memberId={membership.id} />}
       </main>
+    </div>
+  )
+}
+
+/** Lets an admin/PM opt into a browser push when a new request comes in. */
+function NotificationsToggle({ memberId }: { memberId: string }) {
+  const [permission, setPermission] = useState(pushPermission())
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (!pushSupported || permission === 'granted') return null
+
+  if (permission === 'denied') {
+    return (
+      <span className="muted" style={{ fontSize: '0.85rem' }}>
+        Notifications blocked — allow them in your browser's site settings.
+      </span>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      <button
+        className="link"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true); setError(null)
+          try {
+            await enablePushNotifications(memberId)
+            setPermission(pushPermission())
+          } catch (err) {
+            setError(err instanceof Error ? err.message : String(err))
+          }
+          setBusy(false)
+        }}
+      >
+        {busy ? 'Enabling…' : 'Enable notifications'}
+      </button>
+      {error && <span className="error-text" style={{ fontSize: '0.85rem' }}>{error}</span>}
     </div>
   )
 }
