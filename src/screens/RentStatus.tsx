@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import {
   fetchCharges, outstanding, totalOutstanding, isOverdue, statusLabel, money, chargeLabel,
-  type ChargeWithPlace,
+  methodLabel, voidManualPayment,
+  type ChargeWithPlace, type PaymentRow,
   groupByProperty,
 } from '../lib/charges'
+import { RecordPayment } from './RecordPayment'
 
 /**
  * Rent status across the whole organization — what admins and property
@@ -19,13 +21,16 @@ import {
 export function RentStatus() {
   const [charges, setCharges] = useState<ChargeWithPlace[] | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [recording, setRecording] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  function reload() {
     fetchCharges()
       .then(setCharges)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-  }, [])
+  }
+
+  useEffect(() => { reload() }, [])
 
   function toggle(propertyId: string) {
     setExpanded((prev) => {
@@ -120,7 +125,7 @@ export function RentStatus() {
                         </span>
                       </div>
                       {u.charges.map((c) => (
-                        <div key={c.id} style={{ marginTop: '0.35rem' }}>
+                        <div key={c.id} style={{ marginTop: '0.75rem' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
                             <span>{chargeLabel(c.charge_type)}</span>
                             <span className={isOverdue(c) ? 'error-text' : 'muted'}
@@ -133,6 +138,29 @@ export function RentStatus() {
                             {Number(c.amount_paid) > 0 && ` · ${money(Number(c.amount_paid))} paid`}
                             {outstanding(c) > 0 && ` · ${money(outstanding(c))} outstanding`}
                           </div>
+
+                          {(c.payments ?? []).map((p) => (
+                            <PaymentLine
+                              key={p.id}
+                              payment={p}
+                              onChanged={reload}
+                              onError={setError}
+                            />
+                          ))}
+
+                          {outstanding(c) > 0 && (
+                            recording === c.id ? (
+                              <RecordPayment
+                                charge={c}
+                                onRecorded={() => { setRecording(null); reload() }}
+                                onCancel={() => setRecording(null)}
+                              />
+                            ) : (
+                              <button className="link" onClick={() => setRecording(c.id)}>
+                                Record a payment
+                              </button>
+                            )
+                          )}
                         </div>
                       ))}
                     </div>
@@ -143,6 +171,59 @@ export function RentStatus() {
           )
         })}
       </div>
+    </div>
+  )
+}
+
+/**
+ * One payment against a charge, with a way to undo it.
+ *
+ * A payment still in flight is called out rather than shown as money
+ * received: an ACH transfer sits in 'processing' for days, and a landlord
+ * seeing it listed under a charge should not read that as settled.
+ */
+function PaymentLine({
+  payment, onChanged, onError,
+}: { payment: PaymentRow; onChanged: () => void; onError: (m: string) => void }) {
+  const [busy, setBusy] = useState(false)
+  const inFlight = payment.status === 'pending' || payment.status === 'processing'
+  const voided = payment.status === 'refunded'
+  const failed = payment.status === 'failed'
+
+  // Stripe payments are refunded in Stripe, never unpicked here — see
+  // void_manual_payment in db/migrations/018_manual_payments.sql.
+  const canVoid = !voided && !inFlight && payment.method !== 'ach' && payment.method !== 'card'
+
+  return (
+    <div className="muted" style={{ marginTop: '0.35rem', display: 'flex',
+                                    justifyContent: 'space-between', gap: '1rem' }}>
+      <span style={{ textDecoration: voided ? 'line-through' : undefined }}>
+        {money(Number(payment.amount))} by {methodLabel(payment.method)}
+        {payment.paid_at ? ` on ${payment.paid_at.slice(0, 10)}` : ''}
+        {payment.note ? ` · ${payment.note}` : ''}
+        {inFlight && ' · on its way, not cleared yet'}
+        {failed && ' · did not clear'}
+        {voided && ' · voided'}
+      </span>
+      {canVoid && (
+        <button
+          className="link"
+          disabled={busy}
+          style={{ margin: 0, whiteSpace: 'nowrap' }}
+          onClick={async () => {
+            setBusy(true)
+            try {
+              await voidManualPayment(payment.id)
+              onChanged()
+            } catch (e) {
+              onError(e instanceof Error ? e.message : String(e))
+              setBusy(false)
+            }
+          }}
+        >
+          {busy ? 'Voiding…' : 'Void'}
+        </button>
+      )}
     </div>
   )
 }

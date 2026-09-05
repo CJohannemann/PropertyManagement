@@ -229,5 +229,85 @@ select assert_rejected(
          :'lease', :'tenant_member', :'charge2'),
   'a tenant cannot write their own payment record');
 
+-- ------------------------------------------ recording money by hand --
+
+-- The case this exists for: a tenant hands over a cheque. Before
+-- record_manual_payment there was no way to tell the app, so the charge
+-- went overdue and started accruing late fees against money already
+-- received. See db/migrations/018_manual_payments.sql.
+
+insert into rent_charges (lease_id, charge_type, due_date, amount)
+values (:'lease', 'rent', '2026-07-01', 1200) returning id as charge6 \gset
+
+select set_config('request.jwt.uid', '11111111-1111-1111-1111-111111111111', false);
+select record_manual_payment(:'charge6', 500, 'check', '2026-07-02', 'cheque 1041')
+  as part_payment \gset
+
+select assert((select amount_paid from rent_charges where id = :'charge6') = 500,
+  'a recorded cheque credits the ledger, got '
+  || (select amount_paid::text from rent_charges where id = :'charge6'));
+select assert((select status from rent_charges where id = :'charge6') = 'partial',
+  'and leaves the charge partial');
+select assert((select recorded_by from payments where id = :'part_payment') is not null,
+  'the payment records who entered it');
+select assert((select tenant_member_id from payments where id = :'part_payment') = :'tenant_member',
+  'and attributes it to the lease''s primary tenant');
+
+-- Overpaying is refused with the figure that is actually owed, rather
+-- than a constraint name.
+select assert_rejected(
+  format('select record_manual_payment(%L, 900, ''cash'')', :'charge6'),
+  'recording more than is outstanding is refused');
+
+select record_manual_payment(:'charge6', 700, 'cash', '2026-07-05') as rest \gset
+select assert((select amount_paid from rent_charges where id = :'charge6') = 1200,
+  'the balance settles the charge');
+select assert((select status from rent_charges where id = :'charge6') = 'paid',
+  'and marks it paid');
+
+-- Typos happen, and money recorded in error has to be removable.
+select void_manual_payment(:'rest');
+select assert((select amount_paid from rent_charges where id = :'charge6') = 500,
+  'voiding gives the balance back, got '
+  || (select amount_paid::text from rent_charges where id = :'charge6'));
+select assert((select status from rent_charges where id = :'charge6') = 'partial',
+  'and the charge is owed again');
+
+select void_manual_payment(:'rest');
+select assert((select amount_paid from rent_charges where id = :'charge6') = 500,
+  'voiding twice voids once');
+
+-- A Stripe payment must be refunded at Stripe. Voiding one here would
+-- credit the tenant back in this ledger while their money stayed moved.
+select assert_rejected(
+  format('select void_manual_payment(%L)', :'ach_payment'),
+  'a Stripe payment cannot be voided by hand');
+
+-- Stripe's own method values are not available by hand, or the ledger
+-- would hold an ACH payment that no Stripe record backs.
+select assert_rejected(
+  format('select record_manual_payment(%L, 100, ''ach'')', :'charge6'),
+  'a manual payment cannot claim to be an ACH transfer');
+
+-- ----------------------------------- and a tenant still cannot do it --
+
+-- The whole reason payments has no client-facing insert policy. Opening a
+-- recording path for landlords must not have opened one for tenants.
+reset role;
+select assert_rejected(
+  format('set role authenticated;
+          select set_config(''request.jwt.uid'', %L, false);
+          select record_manual_payment(%L, 500, ''cash'')',
+         '33333333-3333-3333-3333-333333333333', :'charge6'),
+  'a tenant cannot record their own rent as paid');
+
+reset role;
+select assert_rejected(
+  format('set role authenticated;
+          select set_config(''request.jwt.uid'', %L, false);
+          select void_manual_payment(%L)',
+         '33333333-3333-3333-3333-333333333333', :'part_payment'),
+  'nor void a payment against them');
+
 reset role;
 select assert(true, 'payment tests completed');

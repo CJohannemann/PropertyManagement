@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, describeError } from '../../lib/supabase'
 import {
   fetchCharges, outstanding, totalOutstanding, isOverdue, statusLabel, money, chargeLabel,
+  methodLabel,
   type ChargeWithPlace,
 } from '../../lib/charges'
 import { fetchRequests, type MaintenanceRequest } from '../../lib/maintenance'
@@ -177,6 +178,21 @@ export function TenantDashboard({ memberId }: Props) {
                 {Number(c.amount_paid) > 0 && ` · ${money(Number(c.amount_paid))} paid`}
                 {outstanding(c) > 0 && ` · ${money(outstanding(c))} left`}
               </div>
+              {/* So a tenant can see their landlord recorded the cheque
+                  they handed over, without having to ask. Voided payments
+                  are left out — an entry made and unmade is the landlord's
+                  correction, not something the tenant did. */}
+              {(c.payments ?? [])
+                .filter((p) => p.status !== 'refunded')
+                .map((p) => (
+                  <div key={p.id} className="muted">
+                    {money(Number(p.amount))} by {methodLabel(p.method)}
+                    {p.paid_at ? ` on ${p.paid_at.slice(0, 10)}` : ''}
+                    {(p.status === 'pending' || p.status === 'processing')
+                      && ' · on its way, not cleared yet'}
+                    {p.status === 'failed' && ' · did not clear'}
+                  </div>
+                ))}
               {stripeConfigured && outstanding(c) > 0 && (
                 <button className="link" onClick={() => setPaying(c)}
                   style={{ marginTop: '0.5rem' }}>
