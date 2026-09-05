@@ -40,8 +40,16 @@ copy_key() {
     return
   fi
 
-  local value
-  value="$(grep "^${src}=" "$BACKEND_ENV" | cut -d= -f2-)"
+  # Guarded rather than `value="$(grep ... | cut ...)"`: under `set -e` with
+  # pipefail, a grep that matches nothing fails the pipeline and kills the
+  # script mid-run, with no error printed and every later step skipped. A
+  # key simply absent from the backend .env — as STRIPE_PUBLISHABLE_KEY is
+  # on any box set up before it existed — is a normal case, not a failure.
+  local value=""
+  if grep -q "^${src}=" "$BACKEND_ENV"; then
+    value="$(grep "^${src}=" "$BACKEND_ENV" | cut -d= -f2-)"
+  fi
+
   if [ -z "$value" ]; then
     if [ "$requirement" = required ]; then
       echo "$src is empty in $BACKEND_ENV — run generate-secrets.sh first." >&2
