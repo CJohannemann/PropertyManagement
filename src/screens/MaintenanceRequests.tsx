@@ -60,7 +60,11 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
 
   return (
     <div>
-      <h2>Open requests</h2>
+      {/* "Open requests" on its own read as though it might mean unpaid
+          rent, since it sits directly under the rent status on the admin
+          and property-manager dashboards. It never did — these are repairs
+          tenants have reported. Named for what they are. */}
+      <h2>Maintenance requests</h2>
       {error && <p className="error-text">{error}</p>}
       {requests === null && !error && <p className="muted">Loading…</p>}
       {requests !== null && unassigned.length === 0 && (

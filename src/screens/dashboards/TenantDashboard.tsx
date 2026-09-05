@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, describeError } from '../../lib/supabase'
 import {
-  fetchCharges, outstanding, totalOutstanding, isOverdue, money, chargeLabel,
+  fetchCharges, outstanding, totalOutstanding, isOverdue, statusLabel, money, chargeLabel,
   type ChargeWithPlace,
 } from '../../lib/charges'
 import { fetchRequests, type MaintenanceRequest } from '../../lib/maintenance'
@@ -169,7 +169,7 @@ export function TenantDashboard({ memberId }: Props) {
                   {chargeLabel(c.charge_type)}
                 </strong>
                 <span className={isOverdue(c) ? 'error-text' : 'muted'} style={{ margin: 0 }}>
-                  {isOverdue(c) ? 'Overdue' : c.status}
+                  {statusLabel(c)}
                 </span>
               </div>
               <div className="muted">

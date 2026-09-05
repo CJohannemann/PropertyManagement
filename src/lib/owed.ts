@@ -54,3 +54,23 @@ function todayLocal(): string {
 export function isOverdue(c: Owing): boolean {
   return outstanding(c) > 0 && c.due_date < todayLocal()
 }
+
+/**
+ * Where a charge stands, in words meant for the person reading them.
+ *
+ * The screens used to print rent_charges.status directly, so a landlord
+ * was shown 'pending' — a database word that says nothing about whether
+ * to worry. Worse, it is the same word for "due in three weeks" and "due
+ * today and unpaid", which are not the same situation at all.
+ *
+ * Derived rather than switched on `status` for the same reason isOverdue
+ * is: a part-paid charge stays 'partial' past its due date, so the stored
+ * status alone under-reports what is actually late.
+ */
+export function statusLabel(c: Owing): string {
+  if (outstanding(c) === 0) return 'Paid'
+  if (isOverdue(c)) return 'Overdue'
+  if (Number(c.amount_paid) > 0) return 'Part paid'
+  if (c.due_date === todayLocal()) return 'Due today'
+  return 'Upcoming'
+}

@@ -68,7 +68,7 @@ export async function fetchCharges(): Promise<ChargeWithPlace[]> {
 // Defined in owed.ts, which is import-free so db/test/overdue.mjs can
 // exercise it directly. Re-exported here because every caller already
 // reaches for these through this module.
-export { outstanding, totalOutstanding, isOverdue } from './owed'
+export { outstanding, totalOutstanding, isOverdue, statusLabel } from './owed'
 
 export function money(n: number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })

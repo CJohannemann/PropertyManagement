@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  fetchCharges, outstanding, totalOutstanding, isOverdue, money, chargeLabel,
+  fetchCharges, outstanding, totalOutstanding, isOverdue, statusLabel, money, chargeLabel,
   type ChargeWithPlace,
 } from '../lib/charges'
 
@@ -58,7 +58,7 @@ export function RentStatus() {
                 <strong>{place}</strong>
                 <span className={isOverdue(c) ? 'error-text' : 'muted'}
                       style={{ margin: 0 }}>
-                  {isOverdue(c) ? 'Overdue' : c.status}
+                  {statusLabel(c)}
                 </span>
               </div>
               <div className="muted">

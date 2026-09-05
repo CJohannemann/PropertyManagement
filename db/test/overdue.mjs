@@ -19,7 +19,7 @@
 // UTC — which is what a CI box and a VPS both default to, and why nothing
 // caught it.
 
-import { isOverdue } from '../../src/lib/owed.ts'
+import { isOverdue, statusLabel } from '../../src/lib/owed.ts'
 
 const ZONES = [
   'UTC',
@@ -68,6 +68,24 @@ for (const zone of ZONES) {
     isOverdue(charge(daysFromToday(-30), 1200, 1200)), false)
   check('a part-paid past charge is still overdue',
     isOverdue(charge(daysFromToday(-30), 1200, 400)), true)
+
+  // The wording a landlord and a tenant actually read. 'Due today' and
+  // 'Upcoming' were both 'pending' before, which said nothing about
+  // whether to worry.
+  check('due today reads as due today',
+    statusLabel(charge(daysFromToday(0))), 'Due today')
+  check('due later reads as upcoming',
+    statusLabel(charge(daysFromToday(14))), 'Upcoming')
+  check('past and unpaid reads as overdue',
+    statusLabel(charge(daysFromToday(-1))), 'Overdue')
+  check('settled reads as paid',
+    statusLabel(charge(daysFromToday(-5), 1200, 1200)), 'Paid')
+  check('part paid and not yet due reads as part paid',
+    statusLabel(charge(daysFromToday(5), 1200, 400)), 'Part paid')
+  // Overdue beats part-paid: money still owed past its date is the more
+  // urgent fact.
+  check('part paid and overdue still reads as overdue',
+    statusLabel(charge(daysFromToday(-5), 1200, 400)), 'Overdue')
 }
 
 console.log(
