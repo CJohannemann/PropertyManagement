@@ -19,7 +19,7 @@
 // UTC — which is what a CI box and a VPS both default to, and why nothing
 // caught it.
 
-import { isOverdue, statusLabel } from '../../src/lib/owed.ts'
+import { isOverdue, statusLabel, groupByProperty } from '../../src/lib/owed.ts'
 
 const ZONES = [
   'UTC',
@@ -87,6 +87,58 @@ for (const zone of ZONES) {
   check('part paid and overdue still reads as overdue',
     statusLabel(charge(daysFromToday(-5), 1200, 400)), 'Overdue')
 }
+
+// ------------------------------------------- grouping rent by building --
+//
+// The rent status screen sums money per building and per unit. A landlord
+// reads those totals to decide who to chase, so the arithmetic is checked
+// rather than eyeballed.
+
+process.env.TZ = 'America/New_York'
+console.log('\ngrouping by building')
+
+const placed = (id, propId, propName, unitId, unitLabel, amount, paid = 0, due = daysFromToday(0)) => ({
+  id, due_date: due, amount, amount_paid: paid, charge_type: 'rent',
+  leases: { units: { id: unitId, label: unitLabel, properties: { id: propId, name: propName } } },
+})
+
+const groups = groupByProperty([
+  placed('c1', 'p1', 'Central', 'u1', '2 - Middle', 1200),
+  placed('c2', 'p1', 'Central', 'u1', '2 - Middle', 1080),
+  placed('c3', 'p1', 'Central', 'u2', '1 - Bottom', 500, 500), // settled
+  placed('c4', 'p2', 'Riverside', 'u3', 'A', 900, 400),        // part paid
+  placed('c5', 'p3', 'Alder', 'u4', 'A', 300, 300),            // all paid
+])
+
+check('one group per building', groups.length, 3)
+check('the building owing most sorts first', groups[0].name, 'Central')
+check('its total is the sum of what is outstanding', groups[0].owed, 2280)
+check('a part-paid building counts only the remainder', groups[1].owed, 500)
+check('a fully settled building sorts last', groups[2].name, 'Alder')
+check('and owes nothing', groups[2].owed, 0)
+
+check('units are grouped within a building', groups[0].units.length, 2)
+check('the unit owing most comes first', groups[0].units[0].label, '2 - Middle')
+check('unit totals sum their own charges', groups[0].units[0].owed, 2280)
+check('a settled unit is kept, not dropped', groups[0].units[1].owed, 0)
+check('every charge is still accounted for', groups[0].charges.length, 3)
+
+// Two buildings sharing a name must not have their money merged — the
+// reason this groups by id rather than by name.
+const sameName = groupByProperty([
+  placed('c1', 'p1', 'Main St', 'u1', 'A', 1000),
+  placed('c2', 'p2', 'Main St', 'u2', 'B', 250),
+])
+check('two buildings with the same name stay separate', sameName.length, 2)
+check('and keep their own totals', [sameName[0].owed, sameName[1].owed].join(), '1000,250')
+
+// A charge whose lease or unit was deleted still has money attached to it.
+const orphan = groupByProperty([
+  { id: 'c9', due_date: daysFromToday(0), amount: 750, amount_paid: 0, leases: null },
+])
+check('an orphaned charge is not silently dropped', orphan.length, 1)
+check('its money still counts', orphan[0].owed, 750)
+check('and it says so', orphan[0].name, 'Unknown property')
 
 console.log(
   failures === 0

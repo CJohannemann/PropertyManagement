@@ -74,3 +74,95 @@ export function statusLabel(c: Owing): string {
   if (c.due_date === todayLocal()) return 'Due today'
   return 'Upcoming'
 }
+
+// ------------------------------------------------- grouping by building --
+
+/** The nesting a charge arrives with, structurally. */
+export type Placed = Owing & {
+  id: string
+  leases?: {
+    units?: {
+      id: string
+      label: string
+      properties?: { id: string; name: string } | null
+    } | null
+  } | null
+}
+
+export type UnitGroup<T extends Placed> = {
+  id: string
+  label: string
+  owed: number
+  charges: T[]
+}
+
+export type PropertyGroup<T extends Placed> = {
+  id: string
+  name: string
+  owed: number
+  unitCount: number
+  units: UnitGroup<T>[]
+  charges: T[]
+}
+
+/**
+ * Buckets charges into buildings, then units within them, summing what is
+ * owed at each level.
+ *
+ * Lives here with the rest of the money rules rather than in the screen
+ * that renders it, so the sums can be tested — RentStatus.tsx reaches for
+ * Supabase and cannot be imported by a test. These totals are what a
+ * landlord reads to decide who to chase, so "the arithmetic is obviously
+ * right" is not good enough.
+ *
+ * Keyed by id rather than name throughout: two buildings in one
+ * organization can share a name, and merging their money into one row
+ * would be a reporting error nobody would spot.
+ */
+export function groupByProperty<T extends Placed>(charges: T[]): PropertyGroup<T>[] {
+  const byProperty = new Map<string, PropertyGroup<T>>()
+
+  for (const c of charges) {
+    const unit = c.leases?.units
+    // A charge whose lease or unit was deleted still has money attached to
+    // it and must not vanish from the totals; it collects under a heading
+    // saying so rather than being dropped.
+    const propertyId = unit?.properties?.id ?? 'unknown'
+    const propertyName = unit?.properties?.name ?? 'Unknown property'
+    const unitId = unit?.id ?? 'unknown'
+    const unitLabel = unit?.label ?? 'Unknown unit'
+
+    let property = byProperty.get(propertyId)
+    if (!property) {
+      property = {
+        id: propertyId, name: propertyName, owed: 0, unitCount: 0, units: [], charges: [],
+      }
+      byProperty.set(propertyId, property)
+    }
+    property.charges.push(c)
+    property.owed += outstanding(c)
+
+    let unitGroup = property.units.find((u) => u.id === unitId)
+    if (!unitGroup) {
+      unitGroup = { id: unitId, label: unitLabel, owed: 0, charges: [] }
+      property.units.push(unitGroup)
+    }
+    unitGroup.charges.push(c)
+    unitGroup.owed += outstanding(c)
+  }
+
+  for (const property of byProperty.values()) {
+    property.unitCount = property.units.length
+    // Within a building, the unit owing most comes first; settled units
+    // sink. Same reasoning as the building order below.
+    property.units.sort((a, b) => b.owed - a.owed || a.label.localeCompare(b.label))
+  }
+
+  // Buildings that owe money first, largest debt first — at a hundred doors
+  // this is what makes the screen usable, since the top of the list is
+  // always the work. Fully settled buildings keep their place
+  // alphabetically below, so a landlord can still confirm one is clear.
+  return [...byProperty.values()].sort(
+    (a, b) => b.owed - a.owed || a.name.localeCompare(b.name),
+  )
+}

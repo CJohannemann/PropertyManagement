@@ -43,7 +43,11 @@ export function chargeLabel(t: ChargeType): string {
 export type ChargeWithPlace = Charge & {
   leases: {
     id: string
-    units: { label: string; properties: { name: string } } | null
+    units: {
+      id: string
+      label: string
+      properties: { id: string; name: string }
+    } | null
   } | null
 }
 
@@ -59,7 +63,11 @@ export async function fetchCharges(): Promise<ChargeWithPlace[]> {
   if (!supabase) return []
   const { data, error } = await supabase
     .from('rent_charges')
-    .select(`${CHARGE_COLUMNS}, leases(id, units(label, properties(name)))`)
+    // ids as well as labels: the rent status screen groups by property and
+    // unit, and two properties in one organization may legitimately share a
+    // name (two "Main St" buildings), which would silently merge their
+    // money into one row if the name were the key.
+    .select(`${CHARGE_COLUMNS}, leases(id, units(id, label, properties(id, name)))`)
     .order('due_date', { ascending: false })
   if (error) throw error
   return data as unknown as ChargeWithPlace[]
@@ -68,7 +76,7 @@ export async function fetchCharges(): Promise<ChargeWithPlace[]> {
 // Defined in owed.ts, which is import-free so db/test/overdue.mjs can
 // exercise it directly. Re-exported here because every caller already
 // reaches for these through this module.
-export { outstanding, totalOutstanding, isOverdue, statusLabel } from './owed'
+export { outstanding, totalOutstanding, isOverdue, statusLabel, groupByProperty } from './owed'
 
 export function money(n: number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
