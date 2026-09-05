@@ -71,6 +71,8 @@ export type ChargeWithPlace = Charge & {
   payments?: PaymentRow[]
   leases: {
     id: string
+    /** Who is on the lease. RLS shows these to admin/PM and to the tenants themselves. */
+    lease_tenants?: { org_members: { id: string; full_name: string | null } | null }[]
     units: {
       id: string
       label: string
@@ -100,7 +102,8 @@ export async function fetchCharges(): Promise<ChargeWithPlace[]> {
     // without a query per charge. RLS scopes them the same way it scopes
     // the charge itself.
     .select(
-      `${CHARGE_COLUMNS}, leases(id, units(id, label, properties(id, name))),`
+      `${CHARGE_COLUMNS}, leases(id, units(id, label, properties(id, name)),`
+      + ' lease_tenants(org_members(id, full_name))),'
       + ' payments(id, amount, method, status, paid_at, note)',
     )
     // Bounded, or this grows without limit: a hundred doors bills well over

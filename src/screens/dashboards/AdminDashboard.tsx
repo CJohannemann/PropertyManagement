@@ -1,23 +1,39 @@
 import { useEffect, useState } from 'react'
 import { supabase, describeError } from '../../lib/supabase'
+import { navigate, type Route } from '../../lib/route'
 import { PropertyDetail, type PropertySummary } from '../PropertyDetail'
 import { RentStatus } from '../RentStatus'
 import { RentOverview } from '../RentOverview'
 import { DashboardSections } from '../DashboardSections'
+import { QuickActions } from '../QuickActions'
 import { LeaseTemplates } from '../LeaseTemplates'
 import { MaintenanceRequests } from '../MaintenanceRequests'
 import { GettingPaid } from '../GettingPaid'
 
 type Property = PropertySummary & { units: { id: string }[] }
 
-type Props = { organizationId: string; organizationName: string; memberId: string }
+type Props = {
+  organizationId: string
+  organizationName: string
+  memberId: string
+  section: Route
+  propertyId?: string
+}
 
-export function AdminDashboard({ organizationId, organizationName, memberId }: Props) {
+/**
+ * The admin's app, split into the sections the bottom nav switches between.
+ *
+ * It was one long page of stacked panels, which fought the spec's own two
+ * rules — answer the important questions in ten seconds, without excessive
+ * scrolling. Home now answers those; everything else is a tap away and has
+ * a URL, so the back button works and a number can link somewhere real.
+ */
+export function AdminDashboard({
+  organizationId, organizationName, memberId, section, propertyId,
+}: Props) {
   const [properties, setProperties] = useState<Property[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [selected, setSelected] = useState<PropertySummary | null>(null)
-  const [showTemplates, setShowTemplates] = useState(false)
 
   async function load() {
     if (!supabase) return
@@ -36,108 +52,143 @@ export function AdminDashboard({ organizationId, organizationName, memberId }: P
     // rows, so it's the effect's real dependency.
   }, [organizationId])
 
-  if (showTemplates) {
+  // Which property the URL is pointing at. Read from the list rather than
+  // held in state, so /properties/<id> works on a cold load and on the back
+  // button, not only when arrived at by tapping.
+  const openProperty = propertyId
+    ? properties?.find((p) => p.id === propertyId) ?? null
+    : null
+
+  if (propertyId && properties && !openProperty) {
     return (
-      <LeaseTemplates
-        organizationId={organizationId}
-        onBack={() => setShowTemplates(false)}
-      />
+      <div>
+        <button className="link" onClick={() => navigate('/properties')}>
+          ← All properties
+        </button>
+        <p className="empty-state">
+          That property isn't here any more. It may have been removed.
+        </p>
+      </div>
     )
   }
 
-  if (selected) {
+  if (openProperty) {
     return (
       <PropertyDetail
-        property={selected}
+        property={openProperty}
         canManageUnits
         organizationName={organizationName}
-        onBack={() => { setSelected(null); load() }}
+        onBack={() => { navigate('/properties'); load() }}
       />
     )
   }
 
-  return (
-    <div>
-      {/* Order is the spec's priority hierarchy: what needs doing, then the
-          money, then everything else. The two most important questions a
-          landlord opens this app with are above the fold. */}
-      <h2>Needs your attention</h2>
-      <DashboardSections
-        organizationId={organizationId}
-        onOpenProperty={(id) => {
-          const p = properties?.find((x) => x.id === id)
-          if (p) setSelected(p)
-        }}
-      />
-
-      <h2 style={{ marginTop: '2rem' }}>Rent status</h2>
-      <RentOverview organizationId={organizationId} />
-      <div style={{ marginTop: '1rem' }}>
-        <RentStatus />
+  if (section === '/rent') {
+    return (
+      <div>
+        <h2>Rent</h2>
+        <RentOverview organizationId={organizationId} />
+        <div style={{ marginTop: '1rem' }}>
+          <RentStatus />
+        </div>
+        <div style={{ marginTop: '2rem' }}>
+          <GettingPaid organizationId={organizationId} />
+        </div>
       </div>
+    )
+  }
 
-      <div style={{ marginTop: '2rem' }}>
-        <GettingPaid organizationId={organizationId} />
-      </div>
+  if (section === '/maintenance') {
+    return <MaintenanceRequests organizationId={organizationId} memberId={memberId} />
+  }
 
-      <div style={{ marginTop: '2rem' }}>
-        <MaintenanceRequests organizationId={organizationId} memberId={memberId} />
-      </div>
+  if (section === '/settings') {
+    return <LeaseTemplates organizationId={organizationId} onBack={() => navigate('/dashboard')} />
+  }
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem' }}>
-        <h2>Properties</h2>
-        <button className="link" onClick={() => setShowForm((s) => !s)}>
-          {showForm ? 'Cancel' : '+ Add property'}
-        </button>
-      </div>
+  if (section === '/properties') {
+    return (
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between',
+                      alignItems: 'center' }}>
+          <h2>Properties</h2>
+          <button className="link" onClick={() => setShowForm((s) => !s)}>
+            {showForm ? 'Cancel' : '+ Add property'}
+          </button>
+        </div>
 
-      {showForm && (
-        <AddPropertyForm
-          organizationId={organizationId}
-          onAdded={() => { setShowForm(false); load() }}
-        />
-      )}
+        {showForm && (
+          <AddPropertyForm
+            organizationId={organizationId}
+            onAdded={() => { setShowForm(false); load() }}
+          />
+        )}
 
-      {error && <p className="error-text">{error}</p>}
-      {properties === null && !error && <p className="muted">Loading…</p>}
-      {properties?.length === 0 && (
-        <p className="empty-state">No properties yet — add your first one above.</p>
-      )}
+        {error && <p className="error-text">{error}</p>}
+        {properties === null && !error && <p className="muted">Loading…</p>}
+        {properties?.length === 0 && (
+          <p className="empty-state">No properties yet — add your first one above.</p>
+        )}
 
-      <div className="card-list">
-        {properties?.map((p) => (
-          <div key={p.id} onClick={() => setSelected(p)} style={{ cursor: 'pointer' }}>
-            <strong>{p.name}</strong>
-            <div className="muted">
-              {p.address_line1}, {p.city}, {p.state} {p.zip}
+        <div className="card-list">
+          {properties?.map((p) => (
+            <div
+              key={p.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate('/properties', { id: p.id })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  navigate('/properties', { id: p.id })
+                }
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <strong>{p.name}</strong>
+              <div className="muted">
+                {p.address_line1}, {p.city}, {p.state} {p.zip}
+              </div>
+              <div className="muted">{p.units.length} unit(s)</div>
             </div>
-            <div className="muted">{p.units.length} unit(s)</div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
 
-      {/* Lease templates were wedged into the Properties heading beside
-          "+ Add property", which read as a property action and crowded the
-          heading on a phone. They are neither — the wording every lease
-          prints from belongs to the organization, not to any one building.
-          This is where the rest of the org-wide settings will land. */}
-      <h2 style={{ marginTop: '2.5rem' }}>Settings</h2>
-      <div className="card-list">
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setShowTemplates(true)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowTemplates(true) }
-          }}
-          style={{ cursor: 'pointer' }}
-        >
-          <strong>Lease templates</strong>
-          <div className="muted">
-            The clause wording your leases are printed from.
+        {/* Lease templates were wedged into this heading beside "+ Add
+            property", which read as a property action and crowded the
+            heading on a phone. They are neither — the wording every lease
+            prints from belongs to the organization, not to any one
+            building. This is where org-wide settings collect. */}
+        <h2 style={{ marginTop: '2.5rem' }}>Settings</h2>
+        <div className="card-list">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate('/settings')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/settings') }
+            }}
+            style={{ cursor: 'pointer' }}
+          >
+            <strong>Lease templates</strong>
+            <div className="muted">
+              The clause wording your leases are printed from.
+            </div>
           </div>
         </div>
       </div>
+    )
+  }
+
+  // Home: what needs doing, then the portfolio, then the shortcuts.
+  return (
+    <div>
+      <h2>Needs your attention</h2>
+      <DashboardSections
+        organizationId={organizationId}
+        onOpenProperty={(id) => navigate('/properties', { id })}
+      />
+      <QuickActions canAddProperty />
     </div>
   )
 }

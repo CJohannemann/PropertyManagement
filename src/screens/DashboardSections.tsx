@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { errorMessage } from '../lib/supabase'
 import { fetchDashboard, type DashboardSummary } from '../lib/dashboard'
+import { navigate } from '../lib/route'
 import { NeedsAttention } from './NeedsAttention'
 import { PortfolioOverview } from './PortfolioOverview'
 
@@ -15,11 +16,8 @@ type Props = {
  * Both read from dashboard_summary(), so they are fetched together rather
  * than twice — this is the first thing loaded and usually on a phone.
  *
- * "View" actions scroll to the relevant section rather than navigating.
- * The app has exactly one screen today and everything below is component
- * state, so there is nowhere to navigate TO; making these real links needs
- * routing, which is its own piece of work. Scrolling is honest about what
- * it does in the meantime, rather than a link that quietly does nothing.
+ * "View" actions navigate to a real screen with its own URL, so the back
+ * button returns here and a link to a balance can be shared.
  */
 export function DashboardSections({ organizationId, onOpenProperty }: Props) {
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
@@ -40,25 +38,19 @@ export function DashboardSections({ organizationId, onOpenProperty }: Props) {
   }
   if (!summary) return <p className="muted">Loading…</p>
 
-  const scrollTo = (heading: string) => () => {
-    const target = Array.from(document.querySelectorAll('h2, h3'))
-      .find((h) => h.textContent?.trim().toLowerCase().startsWith(heading))
-    target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
   return (
     <>
       <NeedsAttention
         summary={summary}
-        onViewRent={scrollTo('rent status')}
-        onViewMaintenance={scrollTo('maintenance requests')}
+        onViewRent={() => navigate('/rent')}
+        onViewMaintenance={() => navigate('/maintenance')}
       />
 
       <h2 style={{ marginTop: '2rem' }}>Your portfolio</h2>
       <PortfolioOverview
         summary={summary}
         onOpenProperty={onOpenProperty}
-        onViewMaintenance={scrollTo('maintenance requests')}
+        onViewMaintenance={() => navigate('/maintenance')}
       />
     </>
   )

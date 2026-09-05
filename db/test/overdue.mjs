@@ -125,6 +125,32 @@ check('unit totals sum their own charges', groups[0].units[0].owed, 2280)
 check('a settled unit is kept, not dropped', groups[0].units[1].owed, 0)
 check('every charge is still accounted for', groups[0].charges.length, 3)
 
+// Who to actually ring. "Unit 2 owes $1,100" does not say who owes it.
+const withTenants = (id, unitId, names) => ({
+  id, due_date: daysFromToday(0), amount: 1000, amount_paid: 0, charge_type: 'rent',
+  leases: {
+    lease_tenants: names.map((n, i) => ({ org_members: { id: `m${i}`, full_name: n } })),
+    units: { id: unitId, label: 'A', properties: { id: 'p1', name: 'Central' } },
+  },
+})
+
+const named = groupByProperty([
+  withTenants('t1', 'u1', ['Ana Diaz', 'Bo Reid']),
+  // Same lease, second charge: the roommates must not be listed twice.
+  withTenants('t2', 'u1', ['Ana Diaz', 'Bo Reid']),
+  withTenants('t3', 'u2', []),
+  withTenants('t4', 'u3', [null, '  ']),
+])
+
+check('both tenants on a lease are listed',
+  named[0].units.find((u) => u.id === 'u1').tenants.join(', '), 'Ana Diaz, Bo Reid')
+check('a second charge on the same lease does not repeat them',
+  named[0].units.find((u) => u.id === 'u1').tenants.length, 2)
+check('a lease with nobody attached lists nobody',
+  named[0].units.find((u) => u.id === 'u2').tenants.length, 0)
+check('blank and missing names are skipped rather than shown empty',
+  named[0].units.find((u) => u.id === 'u3').tenants.length, 0)
+
 // Two buildings sharing a name must not have their money merged — the
 // reason this groups by id rather than by name.
 const sameName = groupByProperty([

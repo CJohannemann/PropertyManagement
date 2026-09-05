@@ -81,6 +81,7 @@ export function statusLabel(c: Owing): string {
 export type Placed = Owing & {
   id: string
   leases?: {
+    lease_tenants?: { org_members: { id: string; full_name: string | null } | null }[] | null
     units?: {
       id: string
       label: string
@@ -93,6 +94,10 @@ export type UnitGroup<T extends Placed> = {
   id: string
   label: string
   owed: number
+  /** Who lives there. The spec's rent list is by tenant, not by unit label:
+   *  a landlord chases a person, and "Unit 2 owes $1,100" does not say who
+   *  to ring. Empty when a lease has no tenant attached yet. */
+  tenants: string[]
   charges: T[]
 }
 
@@ -105,20 +110,6 @@ export type PropertyGroup<T extends Placed> = {
   charges: T[]
 }
 
-/**
- * Buckets charges into buildings, then units within them, summing what is
- * owed at each level.
- *
- * Lives here with the rest of the money rules rather than in the screen
- * that renders it, so the sums can be tested — RentStatus.tsx reaches for
- * Supabase and cannot be imported by a test. These totals are what a
- * landlord reads to decide who to chase, so "the arithmetic is obviously
- * right" is not good enough.
- *
- * Keyed by id rather than name throughout: two buildings in one
- * organization can share a name, and merging their money into one row
- * would be a reporting error nobody would spot.
- */
 export type MonthCell = {
   /** YYYY-MM. */
   month: string
@@ -128,17 +119,6 @@ export type MonthCell = {
   empty: boolean
 }
 
-/**
- * The last `count` months for one unit, oldest first, with a cell for every
- * month whether or not anything was billed.
- *
- * Bucketed on the due date's YEAR AND MONTH TEXT, sliced straight off the
- * date string — never through `new Date`. `new Date('2026-09-01')` parses
- * as UTC midnight and is August 31st anywhere west of Greenwich, which
- * would file a whole month's rent under the previous month for a landlord
- * in Kentucky. Same bug class as the overdue one this module already
- * carries a warning about.
- */
 /**
  * The YYYY-MM `count` months back from `today`, counting today's month as
  * the first.
@@ -153,6 +133,17 @@ export function monthsBack(count: number, today = new Date()): string {
   return `${Math.floor(total / 12)}-${month}`
 }
 
+/**
+ * The last `count` months for one unit, oldest first, with a cell for every
+ * month whether or not anything was billed.
+ *
+ * Bucketed on the due date's YEAR AND MONTH TEXT, sliced straight off the
+ * date string — never through `new Date`. `new Date('2026-09-01')` parses
+ * as UTC midnight and is August 31st anywhere west of Greenwich, which
+ * would file a whole month's rent under the previous month for a landlord
+ * in Kentucky. Same bug class as the overdue one this module already
+ * carries a warning about.
+ */
 export function monthlyHistory(
   charges: Owing[],
   count = 12,
@@ -181,6 +172,20 @@ export function monthlyHistory(
   })
 }
 
+/**
+ * Buckets charges into buildings, then units within them, summing what is
+ * owed at each level.
+ *
+ * Lives here with the rest of the money rules rather than in the screen
+ * that renders it, so the sums can be tested — RentStatus.tsx reaches for
+ * Supabase and cannot be imported by a test. These totals are what a
+ * landlord reads to decide who to chase, so "the arithmetic is obviously
+ * right" is not good enough.
+ *
+ * Keyed by id rather than name throughout: two buildings in one
+ * organization can share a name, and merging their money into one row
+ * would be a reporting error nobody would spot.
+ */
 export function groupByProperty<T extends Placed>(charges: T[]): PropertyGroup<T>[] {
   const byProperty = new Map<string, PropertyGroup<T>>()
 
@@ -206,11 +211,19 @@ export function groupByProperty<T extends Placed>(charges: T[]): PropertyGroup<T
 
     let unitGroup = property.units.find((u) => u.id === unitId)
     if (!unitGroup) {
-      unitGroup = { id: unitId, label: unitLabel, owed: 0, charges: [] }
+      unitGroup = { id: unitId, label: unitLabel, owed: 0, tenants: [], charges: [] }
       property.units.push(unitGroup)
     }
     unitGroup.charges.push(c)
     unitGroup.owed += outstanding(c)
+
+    // Names collected across the unit's charges and de-duplicated: every
+    // charge on one lease carries the same tenants, and a roommate pair
+    // should read "Ana and Bo", not "Ana, Bo, Ana, Bo".
+    for (const lt of c.leases?.lease_tenants ?? []) {
+      const name = lt?.org_members?.full_name?.trim()
+      if (name && !unitGroup.tenants.includes(name)) unitGroup.tenants.push(name)
+    }
   }
 
   for (const property of byProperty.values()) {

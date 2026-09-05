@@ -108,11 +108,20 @@ export function RentStatus() {
                   {b.units.map((u) => (
                     <div key={u.id} style={{ marginBottom: '1rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <strong>{u.label}</strong>
+                        {/* The tenant leads, the unit follows. A landlord
+                            chases a person: "Unit 2 owes $1,100" does not
+                            say who to ring. Falls back to the unit label
+                            when a lease has nobody on it yet. */}
+                        <strong>
+                          {u.tenants.length > 0 ? u.tenants.join(' & ') : u.label}
+                        </strong>
                         <span className="muted" style={{ margin: 0 }}>
                           {u.owed > 0 ? `${money(u.owed)} outstanding` : 'Paid up'}
                         </span>
                       </div>
+                      {u.tenants.length > 0 && (
+                        <div className="muted">{u.label}</div>
+                      )}
                       <MonthStrip charges={u.charges} />
                       {u.charges.map((c) => (
                         <div key={c.id} style={{ marginTop: '0.75rem' }}>

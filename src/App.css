@@ -218,3 +218,75 @@ button.link {
 
   @page { margin: 0.75in; }
 }
+
+/* ------------------------------------------------------- section nav -- */
+
+/*
+ * Fixed to the bottom, thumb-first. This is a phone app before it is a
+ * desktop one, and the bottom of the screen is the only part of a large
+ * phone a thumb reaches without shifting grip.
+ *
+ * env(safe-area-inset-bottom) keeps it clear of the iPhone home indicator,
+ * which otherwise sits on top of the last row of buttons.
+ */
+.app-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  z-index: 10;
+}
+
+.app-nav-item {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--muted);
+  /* 44px is Apple's minimum comfortable touch target; the spec asks for
+   * large, easy-to-tap buttons and this is the floor for that. */
+  min-height: 44px;
+  padding: 0.6rem 0.25rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.app-nav-item.is-current {
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+/* Clears the fixed nav so the last card is never trapped underneath it. */
+.app-shell:has(.app-nav) .app-main {
+  padding-bottom: 5rem;
+}
+
+/* ---------------------------------------------------- quick actions -- */
+
+/*
+ * Two columns on a phone, wrapping to more on a wider screen. Buttons
+ * rather than links because each one starts something.
+ */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.6rem;
+}
+
+.quick-action {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--fg);
+  /* Same 44px floor as the nav: the spec asks for large, easy-to-tap
+   * buttons, and this is what that means in practice. */
+  min-height: 44px;
+  padding: 0.8rem 0.6rem;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useSession } from './lib/useSession'
-import { useRoute, navigate } from './lib/route'
+import { useRoute, navigate, SIGNED_IN_ONLY } from './lib/route'
 import { supabaseConfigured } from './lib/supabase'
 import { acceptInvite } from './lib/org'
 import { takePendingInviteToken } from './lib/inviteLink'
@@ -14,7 +14,8 @@ import { NotFound } from './screens/NotFound'
 
 export default function App() {
   const { session, checking, recovery, clearRecovery } = useSession()
-  const route = useRoute()
+  const location = useRoute()
+  const route = location.route
 
   /**
    * The redirects the routes can't express on their own. Kept in an effect
@@ -37,15 +38,12 @@ export default function App() {
     // root. Leaving it out rendered a blank page for anyone visiting the
     // bare URL signed out, which is the first thing every new visitor
     // does.
+    // Every in-app section redirects to sign-in, not just /dashboard —
+    // otherwise a bookmarked /rent rendered an empty shell when signed out.
+    // The list lives beside the routes in routePaths.ts, where a test
+    // checks every entry is a screen that actually exists.
     if (!session) {
-      if (
-        route === '/' ||
-        route === '/dashboard' ||
-        route === '/setup' ||
-        route === '/reset-password'
-      ) {
-        navigate('/login', { replace: true })
-      }
+      if (SIGNED_IN_ONLY.includes(route)) navigate('/login', { replace: true })
       return
     }
 
@@ -101,8 +99,14 @@ export default function App() {
       return <AcceptInvite />
     case '/setup':
       return session ? <Setup /> : null
+    // Every signed-in screen is the same shell with a different section
+    // showing, so they share one case rather than five near-identical ones.
     case '/dashboard':
-      return session ? <Dashboard /> : null
+    case '/rent':
+    case '/maintenance':
+    case '/properties':
+    case '/settings':
+      return session ? <Dashboard section={route} propertyId={location.id} /> : null
     // Normally unreachable: arriving from a reset email fires
     // PASSWORD_RECOVERY, and the `recovery` check above catches it before
     // this switch runs. This covers landing on the URL directly — without

@@ -1,36 +1,22 @@
 import { useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
+import { parsePath, hrefFor, type Location, type Route } from './routePaths'
 
 /**
  * The whole router — same reasoning as FarmHand's lib/route.ts: a handful
- * of top-level screens chosen by URL, no nested routes, no params beyond a
- * query string. A dependency like react-router would be more code to
- * configure than the thing it replaces.
+ * of screens chosen by URL. A dependency like react-router would be more
+ * code to configure than the thing it replaces.
  *
- * nginx needs `try_files $uri /index.html` once the frontend is actually
- * deployed (not yet — see deploy/selfhost/README.md) for these to be real,
- * refreshable URLs rather than a pushState illusion that 404s on reload.
+ * The path rules live in routePaths.ts, which imports nothing, so they can
+ * be tested without a browser. This file is the browser half: reading
+ * location, pushing history, and telling React.
+ *
+ * nginx serves index.html for unknown paths (`try_files $uri /index.html`
+ * in deploy/nginx-property-management.conf), so these are real refreshable
+ * URLs rather than a pushState illusion that 404s on reload.
  */
-export type Route =
-  | '/'
-  | '/login'
-  | '/signup'
-  | '/setup'
-  | '/accept-invite'
-  | '/reset-password'
-  | '/dashboard'
-
-export type Location = Route | 'not-found'
-
-const ROUTES: Route[] = [
-  '/',
-  '/login',
-  '/signup',
-  '/setup',
-  '/accept-invite',
-  '/reset-password',
-  '/dashboard',
-]
+export { APP_SECTIONS, SIGNED_IN_ONLY } from './routePaths'
+export type { Route, Location } from './routePaths'
 
 /**
  * A native build has no address bar and always boots index.html at '/' —
@@ -42,9 +28,8 @@ export function isNative(): boolean {
 }
 
 function read(): Location {
-  if (isNative()) return '/dashboard'
-  const path = window.location.pathname.replace(/\/+$/, '') || '/'
-  return (ROUTES as string[]).includes(path) ? (path as Route) : 'not-found'
+  if (isNative()) return { route: '/dashboard' }
+  return parsePath(window.location.pathname)
 }
 
 /**
@@ -52,19 +37,23 @@ function read(): Location {
  * back button — so navigate() re-dispatches it by hand to tell useRoute()
  * something changed.
  */
-export function navigate(to: Route, opts: { replace?: boolean } = {}): void {
-  if (read() === to) return
-  if (opts.replace) window.history.replaceState(null, '', to)
-  else window.history.pushState(null, '', to)
+export function navigate(to: Route, opts: { replace?: boolean; id?: string } = {}): void {
+  const target = hrefFor(to, opts.id)
+  if (window.location.pathname.replace(/\/+$/, '') === target.replace(/\/+$/, '')) return
+  if (opts.replace) window.history.replaceState(null, '', target)
+  else window.history.pushState(null, '', target)
   window.dispatchEvent(new PopStateEvent('popstate'))
+  // A new screen starts at its top. Without this, tapping into a property
+  // from halfway down a list opens the property halfway down.
+  window.scrollTo(0, 0)
 }
 
 export function useRoute(): Location {
-  const [route, setRoute] = useState(read)
+  const [location, setLocation] = useState(read)
   useEffect(() => {
-    const onPop = () => setRoute(read())
+    const onPop = () => setLocation(read())
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
-  return route
+  return location
 }

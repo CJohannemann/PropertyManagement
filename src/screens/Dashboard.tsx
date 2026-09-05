@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, errorMessage } from '../lib/supabase'
 import { fetchMyMemberships, fetchOrganizationName, type Membership } from '../lib/org'
-import { navigate } from '../lib/route'
+import { navigate, APP_SECTIONS, type Route } from '../lib/route'
 import { greeting, todayLong } from '../lib/dashboard'
 import { pushSupported, pushPermission, enablePushNotifications } from '../lib/push'
 import { AdminDashboard } from './dashboards/AdminDashboard'
@@ -16,7 +16,14 @@ const ROLE_LABEL: Record<Membership['role'], string> = {
   tenant: 'Tenant',
 }
 
-export function Dashboard() {
+type Props = {
+  /** Which section the URL is asking for. */
+  section: Route
+  /** The property id, when the URL carries one (/properties/<id>). */
+  propertyId?: string
+}
+
+export function Dashboard({ section, propertyId }: Props) {
   const [membership, setMembership] = useState<Membership | null | 'none'>(null)
   const [orgName, setOrgName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -103,6 +110,8 @@ export function Dashboard() {
             organizationId={membership.organization_id}
             organizationName={orgName}
             memberId={membership.id}
+            section={section}
+            propertyId={propertyId}
           />
         )}
         {membership.role === 'property_manager' && (
@@ -110,6 +119,8 @@ export function Dashboard() {
             organizationId={membership.organization_id}
             organizationName={orgName}
             memberId={membership.id}
+            section={section}
+            propertyId={propertyId}
           />
         )}
         {membership.role === 'technician' && (
@@ -117,6 +128,24 @@ export function Dashboard() {
         )}
         {membership.role === 'tenant' && <TenantDashboard memberId={membership.id} />}
       </main>
+
+      {/* Only the roles that have more than one section. A tenant and a
+          technician each have a single screen, and a nav bar with one tab
+          is furniture. */}
+      {(membership.role === 'admin' || membership.role === 'property_manager') && (
+        <nav className="app-nav" aria-label="Sections">
+          {APP_SECTIONS.map((s) => (
+            <button
+              key={s.route}
+              className={section === s.route ? 'app-nav-item is-current' : 'app-nav-item'}
+              aria-current={section === s.route ? 'page' : undefined}
+              onClick={() => navigate(s.route)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </nav>
+      )}
     </div>
   )
 }
