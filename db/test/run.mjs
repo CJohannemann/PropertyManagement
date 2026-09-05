@@ -103,8 +103,34 @@ function loadSchema() {
 
   psql(readFileSync(join(DB, 'schema.sql'), 'utf8'))
   psql(readFileSync(join(DB, 'seed.sql'), 'utf8'))
-  for (const f of readdirSync(join(DB, 'migrations')).filter((f) => f.endsWith('.sql')).sort()) {
-    psql(readFileSync(join(DB, 'migrations', f), 'utf8'))
+
+  // Applied TWICE, deliberately.
+  //
+  // deploy/selfhost/apply-migrations.sh re-runs every migration, including
+  // ones already applied, and both READMEs promise that is safe. Nothing
+  // enforced it: 008 and 013 created policies with no `drop policy if
+  // exists`, which is invisible on a fresh database and aborts the second
+  // run on a real one. Because the script applies files in order and stops
+  // at the first error, that also blocked every later migration — the bug
+  // surfaced on the VPS as a release that appeared to deploy and silently
+  // had none of its schema changes.
+  //
+  // Running them twice here makes that promise a thing the test suite
+  // checks rather than a thing we remember.
+  const migrations = readdirSync(join(DB, 'migrations'))
+    .filter((f) => f.endsWith('.sql')).sort()
+  for (const pass of [1, 2]) {
+    for (const f of migrations) {
+      try {
+        psql(readFileSync(join(DB, 'migrations', f), 'utf8'))
+      } catch (err) {
+        throw new Error(
+          `migration ${f} failed on pass ${pass} of 2`
+          + (pass === 2 ? ' — it is not safe to re-run' : '')
+          + `:\n${err.stderr || err.message}`,
+        )
+      }
+    }
   }
 
   // Supabase's own image grants these to its roles before any app schema

@@ -61,6 +61,20 @@ $fn$;
 alter table lease_templates enable row level security;
 alter table lease_template_clauses enable row level security;
 
+-- Dropped first so this file can be re-run. `create policy` has no
+-- `if not exists`, so without these the second run of
+-- apply-migrations.sh aborts here — and because the script applies every
+-- migration in order, that stops every later migration from being
+-- applied too.
+drop policy if exists lease_templates_read on lease_templates;
+drop policy if exists lease_templates_write on lease_templates;
+drop policy if exists lease_templates_update on lease_templates;
+drop policy if exists lease_templates_delete on lease_templates;
+drop policy if exists lease_template_clauses_read on lease_template_clauses;
+drop policy if exists lease_template_clauses_write on lease_template_clauses;
+drop policy if exists lease_template_clauses_update on lease_template_clauses;
+drop policy if exists lease_template_clauses_delete on lease_template_clauses;
+
 -- Readable by everyone in the organization, including tenants: a tenant
 -- viewing their own lease needs the clause text to render it. Writable by
 -- admin and property manager only.
@@ -88,5 +102,6 @@ create policy lease_template_clauses_delete on lease_template_clauses for delete
   using (has_org_role(org_id_for_template(template_id),
                       array['admin','property_manager']::org_role[]));
 
+drop trigger if exists lease_templates_set_updated_at on lease_templates;
 create trigger lease_templates_set_updated_at before update on lease_templates
   for each row execute function set_updated_at();

@@ -77,6 +77,9 @@ alter table lease_signatures enable row level security;
 -- UETA is about each party holding the executed agreement, and a tenant
 -- who can see their own signature but not the landlord's countersignature
 -- cannot tell whether the lease was ever executed at all.
+-- Dropped first so this file can be re-run; `create policy` has no
+-- `if not exists`. See the note in 008_lease_templates.sql.
+drop policy if exists lease_signatures_read on lease_signatures;
 create policy lease_signatures_read on lease_signatures for select
   using (
     has_org_role(org_id_for_lease(lease_id),
