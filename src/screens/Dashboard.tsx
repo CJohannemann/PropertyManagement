@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, errorMessage } from '../lib/supabase'
 import { fetchMyMemberships, fetchOrganizationName, type Membership } from '../lib/org'
 import { navigate } from '../lib/route'
+import { greeting, todayLong } from '../lib/dashboard'
 import { pushSupported, pushPermission, enablePushNotifications } from '../lib/push'
 import { AdminDashboard } from './dashboards/AdminDashboard'
 import { PropertyManagerDashboard } from './dashboards/PropertyManagerDashboard'
@@ -69,7 +70,20 @@ export function Dashboard() {
     <div className="app-shell">
       <header className="app-header">
         <div>
-          <strong>{orgName}</strong>
+          {/* Greets by first name when there is one. A landlord who never
+              recorded a name gets the organization, which is still better
+              than "Good morning, null". */}
+          <strong>
+            {membership.full_name
+              ? `${greeting()}, ${membership.full_name.split(' ')[0]}`
+              : orgName}
+          </strong>
+          {/* The organization keeps its place here rather than in the
+              headline — someone managing for more than one landlord needs
+              to know whose books they are looking at. */}
+          <div className="muted" style={{ fontSize: '0.85rem' }}>
+            {membership.full_name ? `${orgName} · ` : ''}{todayLong()}
+          </div>
           <div className="role-badge">{ROLE_LABEL[membership.role]}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>

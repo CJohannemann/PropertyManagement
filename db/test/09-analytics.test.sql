@@ -184,4 +184,79 @@ select assert_rejected(
   format('select * from rent_summary(%L, 500)', :'org_a'),
   'an absurd window is refused rather than scanned');
 
+-- ------------------------------------------------ the dashboard summary --
+
+select set_config('request.jwt.uid', 'aaaaaaaa-0000-0000-0000-00000000a001', false);
+select dashboard_summary(:'org_a') as dash \gset
+
+-- Occupancy comes from active leases, never from units.status — nothing has
+-- ever written that column, so it says 'vacant' for every unit ever created
+-- however many tenants are in it.
+select assert((:'dash'::jsonb #>> '{portfolio,units}')::int = 1,
+  'the portfolio counts its units');
+select assert((:'dash'::jsonb #>> '{portfolio,occupied}')::int = 1,
+  'a unit with an active lease counts as occupied, got '
+  || (:'dash'::jsonb #>> '{portfolio,occupied}'));
+select assert((:'dash'::jsonb #>> '{portfolio,vacant}')::int = 0,
+  'and not also as vacant');
+select assert((:'dash'::jsonb #>> '{portfolio,monthly_rent}')::numeric = 1000,
+  'monthly rent sums the active leases');
+
+-- Landlord B's 5000 lease must not appear anywhere in A's dashboard.
+select assert((:'dash'::jsonb #>> '{portfolio,properties}')::int = 1,
+  'the dashboard sees only this organization''s properties');
+
+-- Two charges are past due (this month's is due on the 1st, plus the two
+-- older ones); the summary counts what is actually late.
+select assert((:'dash'::jsonb #>> '{rent,overdue}')::numeric > 0,
+  'overdue rent is reported');
+select assert(
+  (:'dash'::jsonb #>> '{rent,outstanding}')::numeric
+    >= (:'dash'::jsonb #>> '{rent,overdue}')::numeric,
+  'outstanding is never less than the overdue part of it');
+
+-- The repair logged earlier is complete, so nothing is open.
+select assert((:'dash'::jsonb #>> '{maintenance,open}')::int = 0,
+  'no open requests when none were made');
+select assert((:'dash'::jsonb -> 'top_request') is null
+              or (:'dash'::jsonb ->> 'top_request') is null,
+  'and no request is singled out');
+
+-- A real one, urgent, to prove it surfaces.
+insert into maintenance_requests (unit_id, submitted_by, category, description, priority)
+values (:'unit_a', :'member_a', 'plumbing', 'No hot water', 'urgent');
+select dashboard_summary(:'org_a') as dash2 \gset
+
+select assert((:'dash2'::jsonb #>> '{maintenance,open}')::int = 1,
+  'an open request is counted');
+select assert((:'dash2'::jsonb #>> '{maintenance,urgent}')::int = 1,
+  'and counted as urgent');
+select assert((:'dash2'::jsonb #>> '{top_request,description}') = 'No hot water',
+  'the most urgent request is named, not just counted');
+select assert((:'dash2'::jsonb #>> '{properties,0,urgent_maintenance}')::int = 1,
+  'and attributed to its property');
+
+-- A lease ending inside the notice window should be flagged; one ending
+-- next year should not.
+update leases set end_date = current_date + 30 where id = :'lease_a';
+select dashboard_summary(:'org_a') as dash3 \gset
+select assert(jsonb_array_length(:'dash3'::jsonb -> 'expiring_leases') = 1,
+  'a lease ending within 60 days is flagged');
+
+update leases set end_date = current_date + 400 where id = :'lease_a';
+select dashboard_summary(:'org_a') as dash4 \gset
+select assert(jsonb_array_length(:'dash4'::jsonb -> 'expiring_leases') = 0,
+  'a lease ending next year is not');
+
+-- ----------------------------------------------- and the boundary again --
+
+select assert_rejected(
+  format('select dashboard_summary(%L)', :'org_b'),
+  'a landlord cannot open another organization''s dashboard');
+
+select set_config('request.jwt.uid', 'cccccccc-0000-0000-0000-00000000c001', false);
+select assert_rejected(
+  format('select dashboard_summary(%L)', :'org_a'),
+  'someone with no membership cannot open a dashboard at all');
+
 select assert(true, 'analytics tests completed');

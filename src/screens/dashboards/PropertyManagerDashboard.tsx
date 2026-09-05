@@ -3,6 +3,7 @@ import { supabase, describeError } from '../../lib/supabase'
 import { PropertyDetail, type PropertySummary } from '../PropertyDetail'
 import { RentStatus } from '../RentStatus'
 import { RentOverview } from '../RentOverview'
+import { DashboardSections } from '../DashboardSections'
 import { MaintenanceRequests } from '../MaintenanceRequests'
 import { LeaseTemplates } from '../LeaseTemplates'
 
@@ -54,7 +55,16 @@ export function PropertyManagerDashboard({ organizationId, organizationName, mem
 
   return (
     <div>
-      <h2>Rent status</h2>
+      <h2>Needs your attention</h2>
+      <DashboardSections
+        organizationId={organizationId}
+        onOpenProperty={(id) => {
+          const p = properties?.find((x) => x.id === id)
+          if (p) setSelected(p)
+        }}
+      />
+
+      <h2 style={{ marginTop: '2rem' }}>Rent status</h2>
       <RentOverview organizationId={organizationId} />
       <div style={{ marginTop: '1rem' }}>
         <RentStatus />

@@ -64,6 +64,14 @@ button.link {
   font-size: 0.9rem;
 }
 
+/* The look of button.link, for text inside an already-clickable card —
+ * a button nested in a clickable parent gives a screen reader two controls
+ * for one action. */
+.link-text {
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
 .error-text {
   color: var(--danger);
   font-size: 0.85rem;

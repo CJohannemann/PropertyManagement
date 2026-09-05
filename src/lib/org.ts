@@ -7,6 +7,8 @@ export type Membership = {
   organization_id: string
   role: OrgRole
   status: 'invited' | 'active' | 'disabled'
+  /** Null until someone records it — the dashboard greets by name when it can. */
+  full_name: string | null
 }
 
 /**
@@ -44,7 +46,7 @@ export async function fetchMyMemberships(): Promise<Membership[]> {
 
   const { data, error } = await supabase
     .from('org_members')
-    .select('id, organization_id, role, status')
+    .select('id, organization_id, role, status, full_name')
     .eq('user_id', userId)
     .eq('status', 'active')
   if (error) throw error

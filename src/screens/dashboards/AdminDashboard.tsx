@@ -3,6 +3,7 @@ import { supabase, describeError } from '../../lib/supabase'
 import { PropertyDetail, type PropertySummary } from '../PropertyDetail'
 import { RentStatus } from '../RentStatus'
 import { RentOverview } from '../RentOverview'
+import { DashboardSections } from '../DashboardSections'
 import { LeaseTemplates } from '../LeaseTemplates'
 import { MaintenanceRequests } from '../MaintenanceRequests'
 import { GettingPaid } from '../GettingPaid'
@@ -57,7 +58,19 @@ export function AdminDashboard({ organizationId, organizationName, memberId }: P
 
   return (
     <div>
-      <h2>Rent status</h2>
+      {/* Order is the spec's priority hierarchy: what needs doing, then the
+          money, then everything else. The two most important questions a
+          landlord opens this app with are above the fold. */}
+      <h2>Needs your attention</h2>
+      <DashboardSections
+        organizationId={organizationId}
+        onOpenProperty={(id) => {
+          const p = properties?.find((x) => x.id === id)
+          if (p) setSelected(p)
+        }}
+      />
+
+      <h2 style={{ marginTop: '2rem' }}>Rent status</h2>
       <RentOverview organizationId={organizationId} />
       <div style={{ marginTop: '1rem' }}>
         <RentStatus />
