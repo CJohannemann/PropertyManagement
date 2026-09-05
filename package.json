@@ -4,13 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
     "build": "tsc -b && vite build",
+    "dev": "vite",
     "lint": "oxlint",
     "preview": "vite preview",
-    "verify": "npm run verify:proration && npm run verify:split && npm run verify:db && npm run verify:ledger",
+    "verify": "npm run verify:proration && npm run verify:split && npm run verify:overdue && npm run verify:db && npm run verify:ledger",
     "verify:db": "node db/test/run.mjs",
     "verify:ledger": "node server/test/ledger.test.mjs",
+    "verify:overdue": "node --experimental-strip-types db/test/overdue.mjs",
     "verify:proration": "node --experimental-strip-types db/test/proration-parity.mjs",
     "verify:split": "node --experimental-strip-types db/test/split-clauses.mjs"
   },

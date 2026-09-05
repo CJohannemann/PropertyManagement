@@ -142,7 +142,17 @@ function UnitRow({
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <strong>{unit.label}</strong>
-        <span className="muted">{unit.status}</span>
+        {/* Derived from whether a lease is actually running, not read off
+            units.status. Nothing has ever written that column — it is
+            'vacant' from its default and stays that way — so a unit with a
+            signed tenant and overdue rent still announced itself as
+            vacant. 'maintenance' is the one value there that is a real
+            decision someone made, so it still wins when set. */}
+        <span className="muted">
+          {unit.status === 'maintenance'
+            ? 'maintenance'
+            : activeLease ? 'occupied' : 'vacant'}
+        </span>
       </div>
       <div className="muted">
         {[

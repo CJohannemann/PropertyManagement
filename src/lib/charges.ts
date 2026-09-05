@@ -65,24 +65,10 @@ export async function fetchCharges(): Promise<ChargeWithPlace[]> {
   return data as unknown as ChargeWithPlace[]
 }
 
-export function outstanding(c: Charge): number {
-  return Math.max(Number(c.amount) - Number(c.amount_paid), 0)
-}
-
-export function totalOutstanding(charges: Charge[]): number {
-  return charges.reduce((sum, c) => sum + outstanding(c), 0)
-}
-
-/**
- * Whether a charge is actually overdue today. Deliberately derived from
- * the date rather than read off `status`: a partly-paid charge stays
- * 'partial' past its due date (that's more informative than overwriting it
- * with 'late'), so status alone would under-report what's overdue. See
- * mark_overdue_charges() in db/migrations/002_rent_billing.sql.
- */
-export function isOverdue(c: Charge): boolean {
-  return outstanding(c) > 0 && new Date(c.due_date) < new Date(new Date().toDateString())
-}
+// Defined in owed.ts, which is import-free so db/test/overdue.mjs can
+// exercise it directly. Re-exported here because every caller already
+// reaches for these through this module.
+export { outstanding, totalOutstanding, isOverdue } from './owed'
 
 export function money(n: number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
