@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { monthsBack } from './owed'
 
 export type ChargeType =
   | 'rent'
@@ -102,6 +103,16 @@ export async function fetchCharges(): Promise<ChargeWithPlace[]> {
       `${CHARGE_COLUMNS}, leases(id, units(id, label, properties(id, name))),`
       + ' payments(id, amount, method, status, paid_at, note)',
     )
+    // Bounded, or this grows without limit: a hundred doors bills well over
+    // a thousand charges a year, and every one of them was being fetched on
+    // every dashboard load forever.
+    //
+    // The `or` is the important half. A window alone would silently hide an
+    // unpaid charge once it aged past twelve months — the screen that says
+    // what is owed must never quietly stop saying it. status is 'paid' only
+    // when amount_paid reached amount, kept true by the triggers in
+    // 017_payment_triggers.sql.
+    .or(`due_date.gte.${monthsBack(12)}-01,status.neq.paid`)
     .order('due_date', { ascending: false })
   if (error) throw error
   return data as unknown as ChargeWithPlace[]
@@ -110,7 +121,9 @@ export async function fetchCharges(): Promise<ChargeWithPlace[]> {
 // Defined in owed.ts, which is import-free so db/test/overdue.mjs can
 // exercise it directly. Re-exported here because every caller already
 // reaches for these through this module.
-export { outstanding, totalOutstanding, isOverdue, statusLabel, groupByProperty } from './owed'
+export {
+  outstanding, totalOutstanding, isOverdue, statusLabel, groupByProperty, monthlyHistory,
+} from './owed'
 
 /**
  * Records rent that arrived outside the app — a cheque, cash, a bank

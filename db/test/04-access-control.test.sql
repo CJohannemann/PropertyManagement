@@ -56,6 +56,15 @@ select assert((select count(*) from leases) = 0, 'a stranger sees no leases');
 select assert((select count(*) from organizations) = 0, 'a stranger sees no organizations');
 select assert((select count(*) from rent_charges) = 0, 'a stranger sees no charges');
 
+-- Views need watching separately from tables. A Postgres view runs with
+-- its OWNER's rights unless it is declared security_invoker, and the owner
+-- here is the superuser that loaded the schema — which bypasses RLS
+-- entirely. A view granted to `authenticated` therefore hands every row to
+-- every signed-in user unless something says otherwise, no matter how
+-- carefully the underlying tables are policed.
+select assert((select count(*) from lease_signing_status) = 0,
+  'a stranger sees no lease signing status');
+
 reset role;
 select assert_rejected(
   'select create_organization(''Squatter Org'')',

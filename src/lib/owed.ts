@@ -119,6 +119,68 @@ export type PropertyGroup<T extends Placed> = {
  * organization can share a name, and merging their money into one row
  * would be a reporting error nobody would spot.
  */
+export type MonthCell = {
+  /** YYYY-MM. */
+  month: string
+  billed: number
+  collected: number
+  /** No charge was billed for this unit that month at all. */
+  empty: boolean
+}
+
+/**
+ * The last `count` months for one unit, oldest first, with a cell for every
+ * month whether or not anything was billed.
+ *
+ * Bucketed on the due date's YEAR AND MONTH TEXT, sliced straight off the
+ * date string — never through `new Date`. `new Date('2026-09-01')` parses
+ * as UTC midnight and is August 31st anywhere west of Greenwich, which
+ * would file a whole month's rent under the previous month for a landlord
+ * in Kentucky. Same bug class as the overdue one this module already
+ * carries a warning about.
+ */
+/**
+ * The YYYY-MM `count` months back from `today`, counting today's month as
+ * the first.
+ *
+ * Walks a year/month pair rather than subtracting from a Date: subtracting
+ * a month from 31 March lands on 3 March, which would drop February out of
+ * a run of months entirely.
+ */
+export function monthsBack(count: number, today = new Date()): string {
+  const total = today.getFullYear() * 12 + today.getMonth() - (count - 1)
+  const month = String((total % 12) + 1).padStart(2, '0')
+  return `${Math.floor(total / 12)}-${month}`
+}
+
+export function monthlyHistory(
+  charges: Owing[],
+  count = 12,
+  today = new Date(),
+): MonthCell[] {
+  const months: string[] = []
+  for (let i = count; i >= 1; i--) months.push(monthsBack(i, today))
+
+  const billed = new Map<string, { billed: number; collected: number }>()
+  for (const c of charges) {
+    const key = c.due_date.slice(0, 7)
+    const bucket = billed.get(key) ?? { billed: 0, collected: 0 }
+    bucket.billed += Number(c.amount)
+    bucket.collected += Number(c.amount_paid)
+    billed.set(key, bucket)
+  }
+
+  return months.map((month) => {
+    const bucket = billed.get(month)
+    return {
+      month,
+      billed: bucket?.billed ?? 0,
+      collected: bucket?.collected ?? 0,
+      empty: !bucket,
+    }
+  })
+}
+
 export function groupByProperty<T extends Placed>(charges: T[]): PropertyGroup<T>[] {
   const byProperty = new Map<string, PropertyGroup<T>>()
 

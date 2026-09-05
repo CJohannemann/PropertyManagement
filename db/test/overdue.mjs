@@ -19,7 +19,9 @@
 // UTC — which is what a CI box and a VPS both default to, and why nothing
 // caught it.
 
-import { isOverdue, statusLabel, groupByProperty } from '../../src/lib/owed.ts'
+import {
+  isOverdue, statusLabel, groupByProperty, monthlyHistory,
+} from '../../src/lib/owed.ts'
 
 const ZONES = [
   'UTC',
@@ -139,6 +141,56 @@ const orphan = groupByProperty([
 check('an orphaned charge is not silently dropped', orphan.length, 1)
 check('its money still counts', orphan[0].owed, 750)
 check('and it says so', orphan[0].name, 'Unknown property')
+
+// -------------------------------------------- a unit's month-by-month --
+//
+// Run under every timezone, because the failure this guards against is
+// exactly the one already fixed once in this file: a date parsed through
+// `new Date` lands a month early west of Greenwich, filing September's
+// rent under August.
+
+for (const zone of ZONES) {
+  process.env.TZ = zone
+  console.log(`\nmonthly history — ${zone}`)
+
+  const march = new Date(2026, 2, 15) // 15 March 2026, local
+  const history = monthlyHistory(
+    [
+      { due_date: '2026-03-01', amount: 1000, amount_paid: 1000 },
+      { due_date: '2026-02-01', amount: 1000, amount_paid: 400 },
+      { due_date: '2026-01-01', amount: 1000, amount_paid: 0 },
+    ],
+    12,
+    march,
+  )
+
+  check('returns one cell per month', history.length, 12)
+  check('oldest first', history[0].month, '2025-04')
+  check('ending with the month asked about', history[11].month, '2026-03')
+
+  const march2026 = history.find((h) => h.month === '2026-03')
+  check('a charge due the 1st lands in its own month, not the previous one',
+    march2026.billed, 1000)
+  check('and its payment with it', march2026.collected, 1000)
+
+  check('a part-paid month keeps both figures',
+    history.find((h) => h.month === '2026-02').collected, 400)
+  check('an unpaid month collects nothing',
+    history.find((h) => h.month === '2026-01').collected, 0)
+  check('a month with no charge is marked empty',
+    history.find((h) => h.month === '2025-12').empty, true)
+  check('a month with a charge is not',
+    history.find((h) => h.month === '2026-01').empty, false)
+}
+
+// Walking year/month rather than subtracting from a Date: "one month
+// before 31 March" is 3 March if you subtract days, which would drop
+// February from the strip entirely.
+process.env.TZ = 'America/New_York'
+console.log('\nmonthly history — month-end')
+const fromMar31 = monthlyHistory([], 3, new Date(2026, 2, 31))
+check('a run ending on the 31st still walks whole months',
+  fromMar31.map((h) => h.month).join(), '2026-01,2026-02,2026-03')
 
 console.log(
   failures === 0

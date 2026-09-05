@@ -7,6 +7,22 @@
   --accent: #2f5fd6;
   --danger: #c0392b;
 
+  /*
+   * Chart series. Slots 1 and 2 of a validated categorical palette, not
+   * the --accent/--danger UI colours: those are chosen to sit against text
+   * and buttons, and reusing them as data marks means a chart's meaning
+   * shifts whenever the interface is restyled.
+   *
+   * Checked with the data-viz validator against this app's own card
+   * surfaces rather than the palette's reference ones (#f7f8fa light,
+   * #1c1f27 dark): colour-blind separation ΔE 24.7 light / 26.8 dark
+   * against a target of 8, and both clear 3:1 contrast. The dark values
+   * are that palette's own dark steps, not a lightened flip of the light
+   * ones.
+   */
+  --series-collected: #2a78d6;
+  --series-outstanding: #eb6834;
+
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   line-height: 1.5;
   color: var(--fg);
@@ -30,6 +46,8 @@
     --line: #2b2f3a;
     --accent: #7f9dee;
     --danger: #e0685c;
+    --series-collected: #3987e5;
+    --series-outstanding: #d95926;
   }
 }
 
@@ -41,6 +59,8 @@
   --line: #2b2f3a;
   --accent: #7f9dee;
   --danger: #e0685c;
+  --series-collected: #3987e5;
+  --series-outstanding: #d95926;
 }
 
 * {

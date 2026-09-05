@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, describeError } from '../../lib/supabase'
 import { PropertyDetail, type PropertySummary } from '../PropertyDetail'
 import { RentStatus } from '../RentStatus'
+import { RentOverview } from '../RentOverview'
 import { MaintenanceRequests } from '../MaintenanceRequests'
 import { LeaseTemplates } from '../LeaseTemplates'
 
@@ -54,7 +55,10 @@ export function PropertyManagerDashboard({ organizationId, organizationName, mem
   return (
     <div>
       <h2>Rent status</h2>
-      <RentStatus />
+      <RentOverview organizationId={organizationId} />
+      <div style={{ marginTop: '1rem' }}>
+        <RentStatus />
+      </div>
 
       <div style={{ marginTop: '2rem' }}>
         <MaintenanceRequests organizationId={organizationId} memberId={memberId} />

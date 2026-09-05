@@ -3,7 +3,7 @@ import {
   fetchCharges, outstanding, totalOutstanding, isOverdue, statusLabel, money, chargeLabel,
   methodLabel, voidManualPayment,
   type ChargeWithPlace, type PaymentRow,
-  groupByProperty,
+  groupByProperty, monthlyHistory,
 } from '../lib/charges'
 import { RecordPayment } from './RecordPayment'
 
@@ -124,6 +124,7 @@ export function RentStatus() {
                           {u.owed > 0 ? `${money(u.owed)} outstanding` : 'Paid up'}
                         </span>
                       </div>
+                      <MonthStrip charges={u.charges} />
                       {u.charges.map((c) => (
                         <div key={c.id} style={{ marginTop: '0.75rem' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
@@ -224,6 +225,65 @@ function PaymentLine({
           {busy ? 'Voiding…' : 'Void'}
         </button>
       )}
+    </div>
+  )
+}
+
+/**
+ * A unit's last twelve months at a glance — one cell per month, so a
+ * tenant who is repeatedly late looks different from one who missed once.
+ *
+ * Colour is not the only carrier: every cell states its month and figures
+ * in its title, the selected month reads out in words below, and an empty
+ * month is drawn as an outline rather than a shade.
+ */
+function MonthStrip({ charges }: { charges: ChargeWithPlace[] }) {
+  const [picked, setPicked] = useState<string | null>(null)
+  const history = monthlyHistory(charges, 12)
+
+  if (history.every((h) => h.empty)) return null
+
+  const shown = history.find((h) => h.month === picked) ?? null
+
+  return (
+    <div style={{ marginTop: '0.6rem' }}>
+      <div style={{ display: 'flex', gap: 2 }}>
+        {history.map((h) => {
+          const settled = !h.empty && h.collected >= h.billed
+          const part = !h.empty && h.collected > 0 && h.collected < h.billed
+          const label = h.empty
+            ? `${h.month}: nothing billed`
+            : `${h.month}: ${money(h.collected)} of ${money(h.billed)}`
+
+          return (
+            <button
+              key={h.month}
+              title={label}
+              aria-label={label}
+              onClick={() => setPicked(picked === h.month ? null : h.month)}
+              style={{
+                flex: 1, height: 18, padding: 0, cursor: 'pointer',
+                borderRadius: 2,
+                border: h.empty
+                  ? '1px dashed var(--line)'
+                  : picked === h.month ? '1px solid var(--fg)' : '1px solid transparent',
+                background: h.empty
+                  ? 'transparent'
+                  : settled ? 'var(--series-collected)'
+                    : part ? 'var(--series-outstanding)'
+                      : 'var(--danger)',
+              }}
+            />
+          )
+        })}
+      </div>
+      <div className="muted" style={{ marginTop: '0.3rem' }}>
+        {shown
+          ? shown.empty
+            ? `${shown.month}: nothing billed`
+            : `${shown.month}: ${money(shown.collected)} collected of ${money(shown.billed)} billed`
+          : 'Last 12 months — tap a month.'}
+      </div>
     </div>
   )
 }
