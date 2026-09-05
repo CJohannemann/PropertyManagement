@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import {
   fetchRequests, createJobFromRequest, fetchJobs,
+  listRequestPhotos, requestPhotoUrl,
   type MaintenanceRequest, type Job,
 } from '../lib/maintenance'
 import { JobDetail } from './JobDetail'
@@ -83,6 +84,7 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
             <div className="muted">
               {r.category} · reported {r.created_at.slice(0, 10)}
             </div>
+            <RequestPhotos requestId={r.id} />
 
             {assigning === r.id ? (
               <AssignForm
@@ -122,6 +124,31 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
         </div>
       )}
     </div>
+  )
+}
+
+/** Thumbnails for whatever the tenant photographed when they reported this. */
+function RequestPhotos({ requestId }: { requestId: string }) {
+  const [paths, setPaths] = useState<string[]>([])
+  useEffect(() => { listRequestPhotos(requestId).then(setPaths).catch(() => setPaths([])) }, [requestId])
+  if (paths.length === 0) return null
+  return (
+    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+      {paths.map((p) => <RequestPhoto key={p} path={p} />)}
+    </div>
+  )
+}
+
+function RequestPhoto({ path }: { path: string }) {
+  const [url, setUrl] = useState<string | null>(null)
+  // Signed on demand, same reasoning as receipts: the bucket is private
+  // and a signed link should not be minted for photos nobody opens.
+  useEffect(() => { requestPhotoUrl(path).then(setUrl).catch(() => setUrl(null)) }, [path])
+  if (!url) return null
+  return (
+    <a href={url} target="_blank" rel="noreferrer">
+      <img src={url} alt="Reported problem" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6 }} />
+    </a>
   )
 }
 

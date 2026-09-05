@@ -51,22 +51,24 @@ export async function fetchRequests(): Promise<MaintenanceRequest[]> {
   return data as unknown as MaintenanceRequest[]
 }
 
+/** Returns the new request's id, so a photo can be attached to it. */
 export async function submitRequest(input: {
   unitId: string
   submittedBy: string
   category: string
   description: string
   priority: string
-}): Promise<void> {
+}): Promise<string> {
   if (!supabase) throw new Error('Supabase not configured')
-  const { error } = await supabase.from('maintenance_requests').insert({
+  const { data, error } = await supabase.from('maintenance_requests').insert({
     unit_id: input.unitId,
     submitted_by: input.submittedBy,
     category: input.category,
     description: input.description,
     priority: input.priority,
-  })
+  }).select('id').single()
   if (error) throw error
+  return (data as { id: string }).id
 }
 
 export async function fetchJobs(): Promise<Job[]> {
@@ -186,4 +188,38 @@ export async function listReceipts(jobId: string): Promise<string[]> {
   const { data, error } = await supabase.storage.from('receipts').list(jobId)
   if (error) throw error
   return (data ?? []).map((f) => `${jobId}/${f.name}`)
+}
+
+// ------------------------------------------------------ request photos --
+
+/**
+ * Uploads a photo of the reported problem. Same path shape as
+ * uploadReceipt, keyed by request id instead of job id — see
+ * db/migrations/015_request_photo_storage.sql for the RLS policies that
+ * depend on it.
+ */
+export async function uploadRequestPhoto(requestId: string, file: File): Promise<string> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const path = `${requestId}/${crypto.randomUUID()}.${ext}`
+  const { error } = await supabase.storage.from('request-photos').upload(path, file, {
+    contentType: file.type || 'image/jpeg',
+  })
+  if (error) throw error
+  return path
+}
+
+export async function requestPhotoUrl(path: string): Promise<string | null> {
+  if (!supabase) return null
+  const { data, error } = await supabase.storage
+    .from('request-photos').createSignedUrl(path, 60 * 60)
+  if (error) throw error
+  return data?.signedUrl ?? null
+}
+
+export async function listRequestPhotos(requestId: string): Promise<string[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase.storage.from('request-photos').list(requestId)
+  if (error) throw error
+  return (data ?? []).map((f) => `${requestId}/${f.name}`)
 }
