@@ -200,7 +200,9 @@ function AddEntry({
         // rejects an entry that carries nothing measurable.
         hours: type === 'labor' ? num(hours) : null,
         miles: type === 'mileage' ? num(miles) : null,
-        cost: type === 'material' ? num(cost) : null,
+        // Both materials and labour can carry a cost now; the database has
+        // always allowed it and job_totals has always counted it.
+        cost: type === 'material' || type === 'labor' ? num(cost) : null,
         vendor: type === 'material' ? (vendor.trim() || null) : null,
       })
       setDescription(''); setHours(''); setMiles(''); setCost(''); setVendor('')
@@ -248,11 +250,28 @@ function AddEntry({
           </div>
         )}
         {type === 'labor' && (
-          <div className="field">
-            <label htmlFor="e-hours">Hours</label>
-            <input id="e-hours" type="number" min="0" step="0.25" required
-              value={hours} onChange={(e) => setHours(e.target.value)} />
-          </div>
+          <>
+            <div className="field">
+              <label htmlFor="e-hours">Hours</label>
+              <input id="e-hours" type="number" min="0" step="0.25" required
+                value={hours} onChange={(e) => setHours(e.target.value)} />
+            </div>
+            {/* What the technician charged, if anything. Optional because
+                hours worked and money owed are not the same claim — a
+                landlord doing the work themselves logs hours and pays
+                nobody. Without this box the only way to record a $75
+                invoice was to file it as materials and misdescribe it.
+                job_totals() has always summed cost across every entry
+                type, so this needed no schema change. */}
+            <div className="field">
+              <label htmlFor="e-labor-cost">What you paid for it ($)</label>
+              <input id="e-labor-cost" type="number" min="0" step="0.01"
+                value={cost} onChange={(e) => setCost(e.target.value)} />
+              <span className="muted">
+                Leave blank if nobody was paid — the hours are still recorded.
+              </span>
+            </div>
+          </>
         )}
 
         <div className="field">

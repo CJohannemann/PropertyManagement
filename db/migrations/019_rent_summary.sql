@@ -33,6 +33,16 @@ alter view lease_signing_status set (security_invoker = true);
 --
 -- security definer with an explicit role check, rather than a view — see
 -- the note above for why views are the more dangerous shape here.
+--
+-- Dropped first: `create or replace` cannot change a function's return
+-- type, and 020 widens this one with a `spent` column. Without the drop,
+-- re-running the migrations after 020 fails here with "row type defined by
+-- OUT parameters is different" — and because apply-migrations.sh stops at
+-- the first error, that would block every later migration too. The order
+-- still settles correctly: 019 recreates the narrow version and 020
+-- immediately replaces it again.
+drop function if exists rent_summary(uuid, int);
+
 create or replace function rent_summary(org uuid, month_count int default 12)
 returns table(month date, billed numeric, collected numeric, outstanding numeric)
 language plpgsql security definer set search_path = public as $fn$

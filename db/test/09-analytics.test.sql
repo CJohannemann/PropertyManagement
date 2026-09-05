@@ -110,6 +110,68 @@ select assert_rejected(
   format('select * from rent_summary(%L, 12)', :'org_a'),
   'someone with no membership cannot read rent totals');
 
+-- ------------------------------------------------ maintenance spend --
+
+-- The other half of "how is the business doing". A leaky tap: a $40 part,
+-- 20 miles, and a $75 invoice from the technician who fitted it.
+
+-- Back to landlord A: the block above left the session acting as a tenant
+-- to prove they are refused.
+select set_config('request.jwt.uid', 'aaaaaaaa-0000-0000-0000-00000000a001', false);
+
+update organizations set mileage_rate = 0.70 where id = :'org_a';
+
+insert into maintenance_jobs (organization_id, property_id, unit_id, status)
+values (:'org_a', :'prop_a', :'unit_a', 'completed') returning id as job_a \gset
+select id as member_a from org_members
+ where user_id = 'aaaaaaaa-0000-0000-0000-00000000a001' \gset
+
+insert into job_entries (job_id, technician_id, entry_type, description, cost)
+values (:'job_a', :'member_a', 'material', 'Tap cartridge', 40);
+insert into job_entries (job_id, technician_id, entry_type, description, miles)
+values (:'job_a', :'member_a', 'mileage', 'Trip for the part', 20);
+-- The case the form could not previously record: hours worked AND what the
+-- technician charged for them.
+insert into job_entries (job_id, technician_id, entry_type, description, hours, cost)
+values (:'job_a', :'member_a', 'labor', 'Fitted the tap', 1.5, 75);
+
+-- 40 parts + (20 x 0.70) mileage + 75 labour = 129
+select assert(
+  (select spent from rent_summary(:'org_a', 12)
+    where month = date_trunc('month', current_date)::date) = 129,
+  'spend counts parts, mileage at the org rate, and the labour invoice, got '
+  || (select spent::text from rent_summary(:'org_a', 12)
+       where month = date_trunc('month', current_date)::date));
+
+-- The roll-up must agree with the job's own total, or two screens in this
+-- app would quote different figures for the same repair.
+select assert((select total_cost from job_totals(:'job_a')) = 129,
+  'and matches what the job itself reports');
+
+-- Hours with no cost are worked, not owed. Pricing them at an invented
+-- rate would produce a net figure that looks authoritative and is wrong.
+insert into job_entries (job_id, technician_id, entry_type, description, hours)
+values (:'job_a', :'member_a', 'labor', 'My own time', 3);
+select assert(
+  (select spent from rent_summary(:'org_a', 12)
+    where month = date_trunc('month', current_date)::date) = 129,
+  'unpaid hours add nothing to spend');
+
+-- Charges and job entries are summed separately before being joined; done
+-- in one pass each charge would be multiplied by the number of entries
+-- that month, inflating both sides.
+select assert(
+  (select billed from rent_summary(:'org_a', 12)
+    where month = date_trunc('month', current_date)::date) = 1000,
+  'billing is not multiplied by the number of job entries, got '
+  || (select billed::text from rent_summary(:'org_a', 12)
+       where month = date_trunc('month', current_date)::date));
+
+select assert(
+  (select spent from rent_summary(:'org_a', 12)
+    where month = (date_trunc('month', current_date) - interval '4 months')::date) = 0,
+  'a month with no repairs spent nothing');
+
 -- ---------------------------------------------------- the window size --
 
 select set_config('request.jwt.uid', 'aaaaaaaa-0000-0000-0000-00000000a001', false);

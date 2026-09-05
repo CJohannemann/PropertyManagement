@@ -53,6 +53,7 @@ export function RentOverview({ organizationId }: Props) {
 
   const thisMonth = months[months.length - 1]
   const collectedYear = months.reduce((s, m) => s + m.collected, 0)
+  const spentYear = months.reduce((s, m) => s + m.spent, 0)
 
   return (
     <div className="card-list">
@@ -62,7 +63,19 @@ export function RentOverview({ organizationId }: Props) {
         <div className="muted" style={{ marginTop: '0.75rem' }}>
           Last 12 months: {money(collectedYear)} collected of {money(billedEver)} billed
           {' '}({Math.round((collectedYear / billedEver) * 100)}%)
+          {spentYear > 0 && (
+            <>
+              {' · '}{money(spentYear)} spent on repairs
+              {' · '}<strong>{money(collectedYear - spentYear)} net</strong>
+            </>
+          )}
         </div>
+        {spentYear > 0 && (
+          <div className="muted" style={{ marginTop: '0.25rem', fontSize: '0.85rem' }}>
+            Net is rent collected less what you paid out on repairs. It doesn't
+            include your own unpaid time, a mortgage, tax or insurance.
+          </div>
+        )}
       </div>
     </div>
   )
@@ -129,14 +142,33 @@ function topRoundedPath(x: number, y: number, w: number, h: number, r: number): 
     + ` L${x + w},${y + h} Z`
 }
 
+/** The same, mirrored: for a bar hanging below the zero line. */
+function bottomRoundedPath(x: number, y: number, w: number, h: number, r: number): string {
+  const radius = Math.min(r, h, w / 2)
+  return `M${x},${y} L${x},${y + h - radius} Q${x},${y + h} ${x + radius},${y + h}`
+    + ` L${x + w - radius},${y + h} Q${x + w},${y + h} ${x + w},${y + h - radius}`
+    + ` L${x + w},${y} Z`
+}
+
 function TwelveMonths({ months }: { months: RentMonth[] }) {
   const [selected, setSelected] = useState<number | null>(null)
   const [asTable, setAsTable] = useState(false)
 
-  const max = Math.max(...months.map((m) => m.billed), 1)
-  const slotW = W / months.length
-  const scale = (v: number) => (v / max) * (PLOT_BOTTOM - PLOT_TOP)
+  // One dollar scale for both directions. Rent rises from the zero line,
+  // repair spend hangs below it — never a second y-axis, which would let
+  // a $60 repair draw taller than $1,200 of rent and mean nothing.
+  const maxBilled = Math.max(...months.map((m) => m.billed), 0)
+  const maxSpent = Math.max(...months.map((m) => m.spent), 0)
+  const span = Math.max(maxBilled + maxSpent, 1)
+  const perDollar = (PLOT_BOTTOM - PLOT_TOP) / span
+  // With nothing spent this sits on the bottom and the chart looks exactly
+  // as it did before repairs were tracked.
+  const zeroY = PLOT_TOP + maxBilled * perDollar
 
+  const slotW = W / months.length
+  const scale = (v: number) => v * perDollar
+
+  const anySpend = months.some((m) => m.spent > 0)
   const shown = selected != null ? months[selected] : null
 
   return (
@@ -155,6 +187,7 @@ function TwelveMonths({ months }: { months: RentMonth[] }) {
       <div style={{ display: 'flex', gap: '1rem', margin: '0.5rem 0' }}>
         <Key colour="var(--series-collected)" label="Collected" />
         <Key colour="var(--series-outstanding)" label="Outstanding" />
+        {anySpend && <Key colour="var(--series-spent)" label="Repairs" />}
       </div>
 
       {asTable ? (
@@ -166,6 +199,8 @@ function TwelveMonths({ months }: { months: RentMonth[] }) {
                 <th style={cell()}>Billed</th>
                 <th style={cell()}>Collected</th>
                 <th style={cell()}>Outstanding</th>
+                <th style={cell()}>Repairs</th>
+                <th style={cell()}>Net</th>
               </tr>
             </thead>
             <tbody>
@@ -175,6 +210,8 @@ function TwelveMonths({ months }: { months: RentMonth[] }) {
                   <td style={cell()}>{money(m.billed)}</td>
                   <td style={cell()}>{money(m.collected)}</td>
                   <td style={cell()}>{m.outstanding > 0 ? money(m.outstanding) : '—'}</td>
+                  <td style={cell()}>{m.spent > 0 ? money(m.spent) : '—'}</td>
+                  <td style={cell()}>{money(m.collected - m.spent)}</td>
                 </tr>
               ))}
             </tbody>
@@ -189,9 +226,9 @@ function TwelveMonths({ months }: { months: RentMonth[] }) {
             aria-label={`Rent billed and collected over the last ${months.length} months`}
             style={{ display: 'block', overflow: 'visible' }}
           >
-            {/* Recessive baseline. No gridlines: at this size they compete
+            {/* Recessive zero line. No gridlines: at this size they compete
                 with the marks rather than helping read them. */}
-            <line x1={0} y1={PLOT_BOTTOM} x2={W} y2={PLOT_BOTTOM}
+            <line x1={0} y1={zeroY} x2={W} y2={zeroY}
                   stroke="var(--line)" strokeWidth={1} />
 
             {months.map((m, i) => {
@@ -199,12 +236,13 @@ function TwelveMonths({ months }: { months: RentMonth[] }) {
               const x = cx - BAR_W / 2
               const collectedH = scale(m.collected)
               const outstandingH = scale(m.outstanding)
+              const spentH = scale(m.spent)
               const isLast = i === months.length - 1
               const isSelected = selected === i
 
-              // Collected sits on the baseline; what is still owed stacks
+              // Collected sits on the zero line; what is still owed stacks
               // above it, so the bar's full height is what was billed.
-              const collectedY = PLOT_BOTTOM - collectedH
+              const collectedY = zeroY - collectedH
               const outstandingY = collectedY - SEGMENT_GAP - outstandingH
 
               return (
@@ -225,6 +263,17 @@ function TwelveMonths({ months }: { months: RentMonth[] }) {
                         outstandingH > 0.5 ? 0 : 4,
                       )}
                       fill="var(--series-collected)"
+                    />
+                  )}
+
+                  {/* Repair spend hangs below the zero line — money going
+                      the other way, on the same dollar scale, so the two
+                      are directly comparable by eye. Rounded at its own
+                      data end, which points downwards. */}
+                  {spentH > 0.5 && (
+                    <path
+                      d={bottomRoundedPath(x, zeroY + SEGMENT_GAP, BAR_W, spentH, 4)}
+                      fill="var(--series-spent)"
                     />
                   )}
 
@@ -267,6 +316,7 @@ function TwelveMonths({ months }: { months: RentMonth[] }) {
               ? `${monthLabel(shown.month, true)}: ${money(shown.collected)} collected`
                 + ` of ${money(shown.billed)} billed`
                 + (shown.outstanding > 0 ? ` · ${money(shown.outstanding)} outstanding` : '')
+              + (shown.spent > 0 ? ` · ${money(shown.spent)} on repairs` : '')
               : 'Tap a month for its figures.'}
           </div>
         </>

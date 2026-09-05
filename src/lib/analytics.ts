@@ -6,6 +6,8 @@ export type RentMonth = {
   billed: number
   collected: number
   outstanding: number
+  /** Maintenance spend recorded that month: parts, mileage, and paid labour. */
+  spent: number
 }
 
 /**
@@ -34,6 +36,7 @@ export async function fetchRentSummary(
     billed: Number(m.billed),
     collected: Number(m.collected),
     outstanding: Number(m.outstanding),
+    spent: Number(m.spent),
   }))
 }
 
