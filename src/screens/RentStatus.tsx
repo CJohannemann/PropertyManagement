@@ -1,7 +1,7 @@
 import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import {
-  fetchCharges, outstanding, totalOutstanding, isOverdue, statusLabel, money, chargeLabel,
+  fetchCharges, outstanding, isOverdue, statusLabel, money, chargeLabel,
   methodLabel, voidManualPayment,
   type ChargeWithPlace, type PaymentRow,
   groupByProperty, monthlyHistory,
@@ -54,28 +54,16 @@ export function RentStatus() {
     )
   }
 
-  const owed = totalOutstanding(charges)
-  const overdue = charges.filter(isOverdue)
-  // Counts charges that actually owe something, not every charge on file.
-  // "outstanding across 12 charge(s)" when ten of them are settled
-  // overstates the problem.
-  const owing = charges.filter((c) => outstanding(c) > 0)
-
   const buildings = groupByProperty(charges)
 
+  // No summary card here any more. It said "$2,280 outstanding across 2
+  // charges · 2 overdue" directly beneath a Needs Attention item saying
+  // "1 tenant has overdue rent · $2,280" and a rent overview saying
+  // "$2,280 still to come in" — the same figure three times in one screen,
+  // which is how a command centre turns into a data dump. This screen's job
+  // is the breakdown; the totals belong to the sections above it.
   return (
     <div>
-      <div className="card-list">
-        <div>
-          <strong>{money(owed)}</strong> outstanding across {owing.length} charge(s)
-          {overdue.length > 0 && (
-            <div className="error-text" style={{ marginBottom: 0 }}>
-              {overdue.length} overdue ({money(totalOutstanding(overdue))})
-            </div>
-          )}
-        </div>
-      </div>
-
       <div className="card-list">
         {buildings.map((b) => {
           const isOpen = expanded.has(b.id)

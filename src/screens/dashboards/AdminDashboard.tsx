@@ -86,14 +86,9 @@ export function AdminDashboard({ organizationId, organizationName, memberId }: P
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem' }}>
         <h2>Properties</h2>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button className="link" onClick={() => setShowTemplates(true)}>
-            Lease templates
-          </button>
-          <button className="link" onClick={() => setShowForm((s) => !s)}>
-            {showForm ? 'Cancel' : '+ Add property'}
-          </button>
-        </div>
+        <button className="link" onClick={() => setShowForm((s) => !s)}>
+          {showForm ? 'Cancel' : '+ Add property'}
+        </button>
       </div>
 
       {showForm && (
@@ -119,6 +114,29 @@ export function AdminDashboard({ organizationId, organizationName, memberId }: P
             <div className="muted">{p.units.length} unit(s)</div>
           </div>
         ))}
+      </div>
+
+      {/* Lease templates were wedged into the Properties heading beside
+          "+ Add property", which read as a property action and crowded the
+          heading on a phone. They are neither — the wording every lease
+          prints from belongs to the organization, not to any one building.
+          This is where the rest of the org-wide settings will land. */}
+      <h2 style={{ marginTop: '2.5rem' }}>Settings</h2>
+      <div className="card-list">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowTemplates(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowTemplates(true) }
+          }}
+          style={{ cursor: 'pointer' }}
+        >
+          <strong>Lease templates</strong>
+          <div className="muted">
+            The clause wording your leases are printed from.
+          </div>
+        </div>
       </div>
     </div>
   )

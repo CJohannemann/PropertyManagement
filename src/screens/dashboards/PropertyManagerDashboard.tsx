@@ -74,19 +74,7 @@ export function PropertyManagerDashboard({ organizationId, organizationName, mem
         <MaintenanceRequests organizationId={organizationId} memberId={memberId} />
       </div>
 
-      {/* A property manager is allowed to manage lease templates — the RLS
-          policies in 008_lease_templates.sql grant admin and
-          property_manager alike — but this screen never offered a way in.
-          The "no lease template yet" message a manager hits when printing
-          a lease told them to set one up "under Lease templates", which
-          existed only on the admin dashboard. */}
-      <div style={{ display: 'flex', justifyContent: 'space-between',
-                    alignItems: 'center', marginTop: '2rem' }}>
-        <h2>Properties</h2>
-        <button className="link" onClick={() => setShowTemplates(true)}>
-          Lease templates
-        </button>
-      </div>
+      <h2 style={{ marginTop: '2rem' }}>Properties</h2>
       {error && <p className="error-text">{error}</p>}
       {properties === null && !error && <p className="muted">Loading…</p>}
       {properties?.length === 0 && (
@@ -102,6 +90,28 @@ export function PropertyManagerDashboard({ organizationId, organizationName, mem
             <div className="muted">{p.units.length} unit(s)</div>
           </div>
         ))}
+      </div>
+
+      {/* A property manager may manage lease templates — the RLS policies in
+          008_lease_templates.sql grant admin and property_manager alike.
+          Kept out of the Properties heading: the wording every lease prints
+          from belongs to the organization, not to any one building. */}
+      <h2 style={{ marginTop: '2.5rem' }}>Settings</h2>
+      <div className="card-list">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowTemplates(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowTemplates(true) }
+          }}
+          style={{ cursor: 'pointer' }}
+        >
+          <strong>Lease templates</strong>
+          <div className="muted">
+            The clause wording your leases are printed from.
+          </div>
+        </div>
       </div>
     </div>
   )

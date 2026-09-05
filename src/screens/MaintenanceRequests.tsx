@@ -57,6 +57,7 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
 
   const unassigned = requests?.filter((r) => r.status === 'open') ?? []
   const activeJobs = jobs.filter((j) => j.status !== 'completed' && j.status !== 'canceled')
+  const allQuiet = requests !== null && unassigned.length === 0 && activeJobs.length === 0
 
   return (
     <div>
@@ -67,7 +68,15 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
       <h2>Maintenance requests</h2>
       {error && <p className="error-text">{error}</p>}
       {requests === null && !error && <p className="muted">Loading…</p>}
-      {requests !== null && unassigned.length === 0 && (
+      {/* Both lists quiet: say so once. Two headings over two tall empty
+          boxes spent half a phone screen announcing that nothing had
+          happened. */}
+      {allQuiet && (
+        <p className="empty-state">
+          Nothing waiting to be assigned, and no jobs underway.
+        </p>
+      )}
+      {requests !== null && !allQuiet && unassigned.length === 0 && (
         <p className="empty-state">Nothing waiting to be assigned.</p>
       )}
 
@@ -106,8 +115,8 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
         ))}
       </div>
 
-      <h2 style={{ marginTop: '2rem' }}>Jobs in progress</h2>
-      {activeJobs.length === 0 ? (
+      {!allQuiet && <h2 style={{ marginTop: '2rem' }}>Jobs in progress</h2>}
+      {allQuiet ? null : activeJobs.length === 0 ? (
         <p className="empty-state">No jobs underway.</p>
       ) : (
         <div className="card-list">

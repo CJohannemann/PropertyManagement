@@ -28,19 +28,24 @@ export function PortfolioOverview({ summary, onOpenProperty, onViewMaintenance }
 
   return (
     <div>
-      <div className="card-list">
-        <div>
-          <strong>
-            {portfolio.properties} {portfolio.properties === 1 ? 'property' : 'properties'}
-            {' · '}{portfolio.units} {portfolio.units === 1 ? 'unit' : 'units'}
-          </strong>
-          <div className="muted">
-            {portfolio.occupied} occupied · {portfolio.vacant} vacant
-            {portfolio.monthly_rent > 0
-              && ` · ${money(Number(portfolio.monthly_rent))}/month in rent`}
+      {/* The roll-up only earns its place once there is something to roll
+          up. With one property it repeats the single row below it word for
+          word, which is how a summary becomes noise. */}
+      {portfolio.properties > 1 && (
+        <div className="card-list">
+          <div>
+            <strong>
+              {portfolio.properties} properties · {portfolio.units}{' '}
+              {portfolio.units === 1 ? 'unit' : 'units'}
+            </strong>
+            <div className="muted">
+              {portfolio.occupied} occupied · {portfolio.vacant} vacant
+              {portfolio.monthly_rent > 0
+                && ` · ${money(Number(portfolio.monthly_rent))}/month in rent`}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="card-list">
         {properties.map((p) => (
@@ -48,28 +53,23 @@ export function PortfolioOverview({ summary, onOpenProperty, onViewMaintenance }
         ))}
       </div>
 
-      <h3 style={{ marginTop: '2rem', marginBottom: '0.5rem' }}>Maintenance</h3>
-      <div className="card-list">
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={onViewMaintenance}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onViewMaintenance() }
-          }}
-          style={{ cursor: 'pointer' }}
-        >
-          {maintenance.open === 0 && maintenance.scheduled === 0 ? (
-            <>
-              <strong>No open repairs</strong>
-              <div className="muted">
-                {maintenance.completed_this_month > 0
-                  ? `${maintenance.completed_this_month} finished this month. Your properties are looking good.`
-                  : 'Your properties are looking good.'}
-              </div>
-            </>
-          ) : (
-            <>
+      {/* Only when there is something to say. The working lists further
+          down already announce themselves when empty; a third box saying
+          "no repairs" above two more saying the same thing was most of
+          what made this page feel long. */}
+      {(maintenance.open > 0 || maintenance.scheduled > 0) && (
+        <>
+          <h3 style={{ marginTop: '2rem', marginBottom: '0.5rem' }}>Maintenance</h3>
+          <div className="card-list">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={onViewMaintenance}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onViewMaintenance() }
+              }}
+              style={{ cursor: 'pointer' }}
+            >
               <strong>
                 {maintenance.open} open
                 {maintenance.urgent > 0 && ` · ${maintenance.urgent} high priority`}
@@ -79,10 +79,10 @@ export function PortfolioOverview({ summary, onOpenProperty, onViewMaintenance }
                 {maintenance.scheduled} scheduled
                 {' · '}{maintenance.completed_this_month} finished this month
               </div>
-            </>
-          )}
-        </div>
-      </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -78,13 +78,15 @@ export function Dashboard() {
               ? `${greeting()}, ${membership.full_name.split(' ')[0]}`
               : orgName}
           </strong>
-          {/* The organization keeps its place here rather than in the
-              headline — someone managing for more than one landlord needs
-              to know whose books they are looking at. */}
+          {/* One line, not three. The organization keeps its place —
+              someone managing for more than one landlord needs to know
+              whose books they are looking at — but the role badge joins it
+              rather than taking a line of its own, which left "Sign out"
+              floating beside a three-line block. */}
           <div className="muted" style={{ fontSize: '0.85rem' }}>
-            {membership.full_name ? `${orgName} · ` : ''}{todayLong()}
+            {membership.full_name ? `${orgName} · ` : ''}
+            {ROLE_LABEL[membership.role]} · {todayLong()}
           </div>
-          <div className="role-badge">{ROLE_LABEL[membership.role]}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {(membership.role === 'admin' || membership.role === 'property_manager') && (

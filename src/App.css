@@ -122,9 +122,12 @@ button.link {
   padding: 1rem;
 }
 
+/* 1rem, not 2: a dashboard with several quiet sections was spending ~200px
+ * of phone screen on vertical whitespace announcing that nothing had
+ * happened. Empty states should be calm, not cavernous. */
 .empty-state {
   color: var(--muted);
-  padding: 2rem 0;
+  padding: 1rem 0;
   text-align: center;
 }
 
