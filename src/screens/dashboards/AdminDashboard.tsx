@@ -71,7 +71,7 @@ export function AdminDashboard({ organizationId, organizationName, memberId }: P
         <h2>Properties</h2>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <button className="link" onClick={() => setShowTemplates(true)}>
-            Lease template
+            Lease templates
           </button>
           <button className="link" onClick={() => setShowForm((s) => !s)}>
             {showForm ? 'Cancel' : '+ Add property'}

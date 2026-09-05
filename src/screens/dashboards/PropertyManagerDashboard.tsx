@@ -3,6 +3,7 @@ import { supabase, describeError } from '../../lib/supabase'
 import { PropertyDetail, type PropertySummary } from '../PropertyDetail'
 import { RentStatus } from '../RentStatus'
 import { MaintenanceRequests } from '../MaintenanceRequests'
+import { LeaseTemplates } from '../LeaseTemplates'
 
 type Property = PropertySummary & { units: { id: string }[] }
 
@@ -12,6 +13,7 @@ export function PropertyManagerDashboard({ organizationId, organizationName, mem
   const [properties, setProperties] = useState<Property[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<PropertySummary | null>(null)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   async function load() {
     if (!supabase) return
@@ -26,6 +28,15 @@ export function PropertyManagerDashboard({ organizationId, organizationName, mem
   useEffect(() => {
     load()
   }, [])
+
+  if (showTemplates) {
+    return (
+      <LeaseTemplates
+        organizationId={organizationId}
+        onBack={() => setShowTemplates(false)}
+      />
+    )
+  }
 
   if (selected) {
     return (
@@ -49,7 +60,19 @@ export function PropertyManagerDashboard({ organizationId, organizationName, mem
         <MaintenanceRequests organizationId={organizationId} memberId={memberId} />
       </div>
 
-      <h2 style={{ marginTop: '2rem' }}>Properties</h2>
+      {/* A property manager is allowed to manage lease templates — the RLS
+          policies in 008_lease_templates.sql grant admin and
+          property_manager alike — but this screen never offered a way in.
+          The "no lease template yet" message a manager hits when printing
+          a lease told them to set one up "under Lease templates", which
+          existed only on the admin dashboard. */}
+      <div style={{ display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'center', marginTop: '2rem' }}>
+        <h2>Properties</h2>
+        <button className="link" onClick={() => setShowTemplates(true)}>
+          Lease templates
+        </button>
+      </div>
       {error && <p className="error-text">{error}</p>}
       {properties === null && !error && <p className="muted">Loading…</p>}
       {properties?.length === 0 && (

@@ -67,7 +67,10 @@ export function LeaseTemplates({ organizationId, onBack }: Props) {
     return (
       <div>
         <button className="link" onClick={onBack}>← Back</button>
-        <h2>Lease template</h2>
+        {/* Named the same as the button that reaches it and the empty
+            state that points at it — someone following that instruction
+            should land on a heading that matches the words they read. */}
+        <h2>Lease templates</h2>
         <p className="muted">
           The app fills in the figures — rent, dates, deposits, late fees —
           but the wording is your document. Requirements differ by state,
