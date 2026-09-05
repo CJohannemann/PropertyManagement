@@ -290,3 +290,48 @@ button.link {
   text-align: left;
   cursor: pointer;
 }
+
+/* ------------------------------------------------- notification bell -- */
+
+.bell-badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  background: var(--danger);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  line-height: 1;
+  padding: 0.15rem 0.3rem;
+  min-width: 1rem;
+  text-align: center;
+}
+
+/*
+ * Anchored to the right edge of the header rather than centred: on a
+ * narrow screen a panel centred on the bell would run off the side.
+ * max-height keeps a long history from covering the whole screen.
+ */
+.notification-panel {
+  position: absolute;
+  top: 1.8rem;
+  right: 0;
+  width: min(20rem, calc(100vw - 2rem));
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+  z-index: 20;
+}
+
+.notification-row {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.notification-row:last-child {
+  border-bottom: none;
+}

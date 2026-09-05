@@ -6,6 +6,7 @@ import { RentStatus } from '../RentStatus'
 import { RentOverview } from '../RentOverview'
 import { DashboardSections } from '../DashboardSections'
 import { QuickActions } from '../QuickActions'
+import { Upcoming } from '../Upcoming'
 import { MaintenanceRequests } from '../MaintenanceRequests'
 import { LeaseTemplates } from '../LeaseTemplates'
 
@@ -161,6 +162,12 @@ export function PropertyManagerDashboard({
         organizationId={organizationId}
         onOpenProperty={(id) => navigate('/properties', { id })}
       />
+      <div style={{ marginTop: '2rem' }}>
+        <Upcoming
+          organizationId={organizationId}
+          propertyChoices={(properties ?? []).map((p) => ({ id: p.id, name: p.name }))}
+        />
+      </div>
       <QuickActions />
     </div>
   )

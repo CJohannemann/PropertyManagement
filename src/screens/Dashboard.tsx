@@ -3,6 +3,7 @@ import { supabase, errorMessage } from '../lib/supabase'
 import { fetchMyMemberships, fetchOrganizationName, type Membership } from '../lib/org'
 import { navigate, APP_SECTIONS, type Route } from '../lib/route'
 import { greeting, todayLong } from '../lib/dashboard'
+import { NotificationBell } from './NotificationBell'
 import { pushSupported, pushPermission, enablePushNotifications } from '../lib/push'
 import { AdminDashboard } from './dashboards/AdminDashboard'
 import { PropertyManagerDashboard } from './dashboards/PropertyManagerDashboard'
@@ -97,7 +98,10 @@ export function Dashboard({ section, propertyId }: Props) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {(membership.role === 'admin' || membership.role === 'property_manager') && (
-            <NotificationsToggle memberId={membership.id} />
+            <>
+              <NotificationBell organizationId={membership.organization_id} />
+              <NotificationsToggle memberId={membership.id} />
+            </>
           )}
           <button className="link" onClick={signOut}>
             Sign out
