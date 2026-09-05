@@ -7,6 +7,7 @@ import { RentOverview } from '../RentOverview'
 import { DashboardSections } from '../DashboardSections'
 import { QuickActions } from '../QuickActions'
 import { Upcoming } from '../Upcoming'
+import { RecentActivity } from '../RecentActivity'
 import { MaintenanceRequests } from '../MaintenanceRequests'
 import { LeaseTemplates } from '../LeaseTemplates'
 
@@ -80,7 +81,10 @@ export function PropertyManagerDashboard({
     return (
       <div>
         <h2>Rent</h2>
-        <RentOverview organizationId={organizationId} />
+        <RentOverview
+          organizationId={organizationId}
+          propertyChoices={(properties ?? []).map((p) => ({ id: p.id, name: p.name }))}
+        />
         <div style={{ marginTop: '1rem' }}>
           <RentStatus />
         </div>
@@ -168,6 +172,8 @@ export function PropertyManagerDashboard({
           propertyChoices={(properties ?? []).map((p) => ({ id: p.id, name: p.name }))}
         />
       </div>
+      <h2 style={{ marginTop: '2rem' }}>Recent activity</h2>
+      <RecentActivity organizationId={organizationId} />
       <QuickActions />
     </div>
   )

@@ -260,3 +260,63 @@ select assert_rejected(
   'someone with no membership cannot open a dashboard at all');
 
 select assert(true, 'analytics tests completed');
+
+-- ---------------------------------------------- filtering by property --
+
+select set_config('request.jwt.uid', 'aaaaaaaa-0000-0000-0000-00000000a001', false);
+
+-- A second building for landlord A, with its own rent.
+insert into properties (organization_id, name, address_line1, city, state, zip)
+values (:'org_a', 'A Cottage', '2 A St', 'Covington', 'KY', '41051') returning id as prop_a2 \gset
+insert into units (property_id, label) values (:'prop_a2', 'C1') returning id as unit_a2 \gset
+insert into leases (unit_id, start_date, rent_amount, rent_due_day, status)
+values (:'unit_a2', '2026-01-01', 700, 1, 'active') returning id as lease_a2 \gset
+insert into rent_charges (lease_id, charge_type, due_date, amount, amount_paid, status)
+values (:'lease_a2', 'rent', date_trunc('month', current_date)::date, 700, 700, 'paid');
+
+-- Unfiltered, both buildings count.
+select assert(
+  (select billed from rent_summary(:'org_a', 12)
+    where month = date_trunc('month', current_date)::date) = 1700,
+  'unfiltered totals cover every building, got '
+  || (select billed::text from rent_summary(:'org_a', 12)
+       where month = date_trunc('month', current_date)::date));
+
+-- Filtered, only the one asked for.
+select assert(
+  (select billed from rent_summary(:'org_a', 12, :'prop_a2')
+    where month = date_trunc('month', current_date)::date) = 700,
+  'filtering to a building reports only its rent, got '
+  || (select billed::text from rent_summary(:'org_a', 12, :'prop_a2')
+       where month = date_trunc('month', current_date)::date));
+select assert(
+  (select collected from rent_summary(:'org_a', 12, :'prop_a2')
+    where month = date_trunc('month', current_date)::date) = 700,
+  'and only its collections');
+
+-- The original building is unaffected by the new one existing.
+select assert(
+  (select billed from rent_summary(:'org_a', 12, :'prop_a')
+    where month = date_trunc('month', current_date)::date) = 1000,
+  'the other building still reports its own');
+
+-- The repair logged earlier was on the first property, so a filter to the
+-- second must not pick up its cost.
+select assert(
+  (select spent from rent_summary(:'org_a', 12, :'prop_a2')
+    where month = date_trunc('month', current_date)::date) = 0,
+  'spend is filtered too, got '
+  || (select spent::text from rent_summary(:'org_a', 12, :'prop_a2')
+       where month = date_trunc('month', current_date)::date));
+select assert(
+  (select spent from rent_summary(:'org_a', 12, :'prop_a')
+    where month = date_trunc('month', current_date)::date) = 129,
+  'and the building that had the repair keeps it');
+
+-- Asking about someone else's building is refused rather than answered
+-- with zeros, which would read as "that building earns nothing".
+select assert_rejected(
+  format('select * from rent_summary(%L, 12, %L)', :'org_a', :'prop_b'),
+  'a property from another organization is refused');
+
+select assert(true, 'filter tests completed');

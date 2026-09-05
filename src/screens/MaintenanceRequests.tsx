@@ -83,19 +83,33 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
       <div className="card-list">
         {unassigned.map((r) => (
           <div key={r.id}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <strong>
-                {r.units?.properties?.name}
-                {r.units?.label ? ` · ${r.units.label}` : ''}
-              </strong>
-              <span className={r.priority === 'urgent' ? 'error-text' : 'muted'}
-                    style={{ margin: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+              <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'baseline' }}>
+                {/* Severity at a glance, but never colour alone — the
+                    priority is spelled out on the right of the same row. */}
+                <span aria-hidden="true" style={{
+                  width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
+                  background: r.priority === 'urgent' || r.priority === 'high'
+                    ? 'var(--danger)'
+                    : r.priority === 'normal' ? 'var(--series-outstanding)'
+                      : 'var(--muted)',
+                }} />
+                <strong>{r.description}</strong>
+              </span>
+              <span className={r.priority === 'urgent' || r.priority === 'high'
+                ? 'error-text' : 'muted'}
+                    style={{ margin: 0, whiteSpace: 'nowrap' }}>
                 {r.priority}
               </span>
             </div>
-            <div>{r.description}</div>
-            <div className="muted">
-              {r.category} · reported {r.created_at.slice(0, 10)}
+            {/* The problem leads and the place follows. A landlord scanning
+                this is looking for "no hot water", not for which building
+                they own it in. */}
+            <div className="muted" style={{ marginLeft: '1.25rem' }}>
+              {r.units?.properties?.name}
+              {r.units?.label ? ` · ${r.units.label}` : ''}
+              {' · '}{r.category}
+              {' · '}{describeAge(r.created_at)}
             </div>
             <RequestPhotos requestId={r.id} />
 
@@ -219,4 +233,20 @@ function AssignForm({
       </button>
     </form>
   )
+}
+
+/**
+ * "Open 2 days" rather than a date.
+ *
+ * How long something has been waiting is the thing that matters on this
+ * screen — a normal-priority request left sitting for three weeks is its
+ * own kind of failure, and a date makes the reader do that arithmetic.
+ */
+function describeAge(createdAt: string): string {
+  const days = Math.floor(
+    (Date.now() - new Date(createdAt).getTime()) / 86_400_000,
+  )
+  if (days <= 0) return 'reported today'
+  if (days === 1) return 'open 1 day'
+  return `open ${days} days`
 }

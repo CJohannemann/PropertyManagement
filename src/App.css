@@ -335,3 +335,28 @@ button.link {
 .notification-row:last-child {
   border-bottom: none;
 }
+
+/* ------------------------------------------------------- filter row -- */
+
+/*
+ * One row above the figures, so it reads as governing everything below
+ * rather than any single number. Wraps on a narrow screen instead of
+ * forcing a horizontal scroll, which the spec rules out.
+ */
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.filter-row select {
+  flex: 1 1 8rem;
+  min-height: 40px;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 0.9rem;
+}

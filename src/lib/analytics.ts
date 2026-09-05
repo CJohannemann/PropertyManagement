@@ -22,11 +22,13 @@ export type RentMonth = {
 export async function fetchRentSummary(
   organizationId: string,
   months = 12,
+  propertyId: string | null = null,
 ): Promise<RentMonth[]> {
   if (!supabase) return []
   const { data, error } = await supabase.rpc('rent_summary', {
     org: organizationId,
     month_count: months,
+    property: propertyId,
   })
   if (error) throw error
   // numeric arrives as a string, deliberately — see the note in

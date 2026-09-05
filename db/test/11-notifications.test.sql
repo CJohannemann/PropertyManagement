@@ -138,3 +138,59 @@ select assert_rejected(
 
 reset role;
 select assert(true, 'notification tests completed');
+
+-- ------------------------------------------------------ recent activity --
+--
+-- Derived from the records rather than an audit log, so it cannot drift
+-- from what actually happened. These check it reports the right events, in
+-- the right order, and stays inside the organization.
+
+select set_config('request.jwt.uid', '11111111-1111-1111-1111-1111111111ff', false);
+
+select assert((select count(*) from recent_activity(:'org', 20)) >= 3,
+  'the feed reports what has happened, got '
+  || (select count(*)::text from recent_activity(:'org', 20)));
+
+select assert(
+  (select count(*) from recent_activity(:'org', 20) where kind = 'payment') = 1,
+  'the cheque shows as a payment');
+select assert(
+  (select count(*) from recent_activity(:'org', 20) where kind = 'request') = 2,
+  'both repair reports show');
+select assert(
+  (select count(*) from recent_activity(:'org', 20) where kind = 'lease') = 1,
+  'and the lease being created');
+
+-- Newest first: the feed is read from the top.
+select assert(
+  (select happened_at from recent_activity(:'org', 20) limit 1)
+    >= (select happened_at from recent_activity(:'org', 20) offset 1 limit 1),
+  'newest first');
+
+-- The payment names who paid, not just how much — the point of an activity
+-- feed is who did what.
+select assert(
+  (select detail from recent_activity(:'org', 20) where kind = 'payment')
+    like 'A Tenant%',
+  'a payment says who made it, got '
+  || (select detail from recent_activity(:'org', 20) where kind = 'payment'));
+
+-- A voided payment did not happen, so it drops out rather than showing
+-- struck through.
+select id as paid_id from payments where rent_charge_id = :'charge' limit 1 \gset
+update payments set status = 'refunded' where id = :'paid_id';
+select assert(
+  (select count(*) from recent_activity(:'org', 20) where kind = 'payment') = 0,
+  'a voided payment leaves the feed');
+
+select assert((select count(*) from recent_activity(:'org', 2)) = 2,
+  'the limit is respected');
+select assert_rejected(
+  format('select * from recent_activity(%L, 500)', :'org'),
+  'an absurd limit is refused rather than scanned');
+
+select assert_rejected(
+  format('select * from recent_activity(%L, 20)', :'org2'),
+  'and one landlord cannot read another organization''s activity');
+
+select assert(true, 'activity tests completed');
