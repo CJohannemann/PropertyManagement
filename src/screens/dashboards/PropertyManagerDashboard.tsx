@@ -10,7 +10,7 @@ import { QuickActions } from '../QuickActions'
 import { Upcoming } from '../Upcoming'
 import { RecentActivity } from '../RecentActivity'
 import { MaintenanceRequests } from '../MaintenanceRequests'
-import { LeaseTemplates } from '../LeaseTemplates'
+import { Settings } from '../Settings'
 
 type Property = PropertySummary & { units: { id: string }[] }
 
@@ -100,7 +100,16 @@ export function PropertyManagerDashboard({
   }
 
   if (section === '/settings') {
-    return <LeaseTemplates organizationId={organizationId} onBack={() => navigate('/dashboard')} />
+    return (
+      <Settings
+        organizationId={organizationId}
+        // create_invite() lets a property manager invite tenants and
+        // nothing else, so offering the staff form here would only produce
+        // a rejection from the database.
+        canInviteMembers={false}
+        onBack={() => navigate('/dashboard')}
+      />
+    )
   }
 
   if (section === '/properties') {
@@ -152,9 +161,9 @@ export function PropertyManagerDashboard({
             }}
             style={{ cursor: 'pointer' }}
           >
-            <strong>Lease templates</strong>
+            <strong>Settings</strong>
             <div className="muted">
-              The clause wording your leases are printed from.
+              Appearance, your team, and lease templates.
             </div>
           </div>
         </div>

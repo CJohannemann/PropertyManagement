@@ -53,6 +53,27 @@ export async function fetchMyMemberships(): Promise<Membership[]> {
   return (data ?? []).sort((a, b) => ROLE_RANK[a.role] - ROLE_RANK[b.role])
 }
 
+/**
+ * Everyone in an organization, for the settings roster.
+ *
+ * Readable by admins and property managers under org_members_read
+ * (db/schema.sql) — the same policy fetchMyMemberships() has to filter
+ * around. There is deliberately no email here: org_members doesn't carry
+ * one, and auth.users isn't readable from a browser.
+ *
+ * Includes disabled members rather than hiding them, since "why can't they
+ * sign in" is exactly the question this list is here to answer.
+ */
+export async function fetchOrgMembers(orgId: string): Promise<Membership[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('org_members')
+    .select('id, organization_id, role, status, full_name')
+    .eq('organization_id', orgId)
+  if (error) throw error
+  return (data as Membership[]).sort((a, b) => ROLE_RANK[a.role] - ROLE_RANK[b.role])
+}
+
 export async function fetchOrganizationName(orgId: string): Promise<string> {
   if (!supabase) return ''
   const { data, error } = await supabase

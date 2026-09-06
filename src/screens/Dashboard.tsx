@@ -4,6 +4,7 @@ import { fetchMyMemberships, fetchOrganizationName, type Membership } from '../l
 import { navigate, APP_SECTIONS, type Route } from '../lib/route'
 import { greeting, todayLong } from '../lib/dashboard'
 import { NotificationBell } from './NotificationBell'
+import { SettingsMenu } from './SettingsMenu'
 import { pushSupported, pushPermission, enablePushNotifications } from '../lib/push'
 import { AdminDashboard } from './dashboards/AdminDashboard'
 import { PropertyManagerDashboard } from './dashboards/PropertyManagerDashboard'
@@ -103,9 +104,16 @@ export function Dashboard({ section, propertyId }: Props) {
               <NotificationsToggle memberId={membership.id} />
             </>
           )}
-          <button className="link" onClick={signOut}>
-            Sign out
-          </button>
+          {/* Only admins and property managers have a /settings screen —
+              the other two dashboards ignore the section entirely — so
+              only they are offered the way in. Appearance and sign out
+              are in the menu itself, so everyone still gets those. */}
+          <SettingsMenu
+            canOpenSettings={
+              membership.role === 'admin' || membership.role === 'property_manager'
+            }
+            onSignOut={signOut}
+          />
         </div>
       </header>
       <main className="app-main">

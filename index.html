@@ -4,6 +4,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Property Management</title>
+    <!--
+      Applies a saved light/dark choice before the first paint. Without it
+      the page paints from the default palette — which follows the OS —
+      and then flips once the bundle loads, so anyone who has deliberately
+      chosen the opposite of their device setting sees the wrong theme
+      flash on every single load.
+
+      Inline and blocking on purpose: a deferred module (main.tsx) runs too
+      late to prevent that. Kept to the one thing that must happen early.
+      The key matches KEY in src/lib/theme.ts.
+    -->
+    <script>
+      try {
+        var t = localStorage.getItem('pm_theme')
+        if (t === 'light' || t === 'dark') {
+          document.documentElement.setAttribute('data-theme', t)
+        }
+      } catch (e) {
+        /* Storage can throw when cookies are blocked. Follow the OS then. */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

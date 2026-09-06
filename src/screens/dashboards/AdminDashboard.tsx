@@ -9,7 +9,7 @@ import { DashboardSections } from '../DashboardSections'
 import { QuickActions } from '../QuickActions'
 import { Upcoming } from '../Upcoming'
 import { RecentActivity } from '../RecentActivity'
-import { LeaseTemplates } from '../LeaseTemplates'
+import { Settings } from '../Settings'
 import { MaintenanceRequests } from '../MaintenanceRequests'
 import { GettingPaid } from '../GettingPaid'
 
@@ -111,7 +111,13 @@ export function AdminDashboard({
   }
 
   if (section === '/settings') {
-    return <LeaseTemplates organizationId={organizationId} onBack={() => navigate('/dashboard')} />
+    return (
+      <Settings
+        organizationId={organizationId}
+        canInviteMembers
+        onBack={() => navigate('/dashboard')}
+      />
+    )
   }
 
   if (section === '/properties') {
@@ -178,9 +184,9 @@ export function AdminDashboard({
             }}
             style={{ cursor: 'pointer' }}
           >
-            <strong>Lease templates</strong>
+            <strong>Settings</strong>
             <div className="muted">
-              The clause wording your leases are printed from.
+              Appearance, your team, and lease templates.
             </div>
           </div>
         </div>
