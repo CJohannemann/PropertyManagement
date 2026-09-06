@@ -22,6 +22,7 @@
 import {
   isOverdue, statusLabel, groupByProperty, monthlyHistory,
 } from '../../src/lib/owed.ts'
+import { periodRange } from '../../src/lib/periods.ts'
 
 const ZONES = [
   'UTC',
@@ -217,6 +218,34 @@ console.log('\nmonthly history — month-end')
 const fromMar31 = monthlyHistory([], 3, new Date(2026, 2, 31))
 check('a run ending on the 31st still walks whole months',
   fromMar31.map((h) => h.month).join(), '2026-01,2026-02,2026-03')
+
+// ----------------------------------------------- reporting periods --
+//
+// The date rules behind the dashboard's period filter. Month ends are the
+// part that goes wrong: February, and any month that is not 30 days.
+
+process.env.TZ = 'America/New_York'
+console.log('\nreporting periods')
+
+const nov = new Date(2026, 10, 15) // 15 November 2026, local
+check('this month starts on the 1st', periodRange('this_month', undefined, nov).from, '2026-11-01')
+check('and runs to the month end', periodRange('this_month', undefined, nov).to, '2026-11-30')
+check('last month is the whole of October', periodRange('last_month', undefined, nov).from, '2026-10-01')
+check('ending on the 31st', periodRange('last_month', undefined, nov).to, '2026-10-31')
+check('year to date starts in January', periodRange('ytd', undefined, nov).from, '2026-01-01')
+check('and ends today', periodRange('ytd', undefined, nov).to, '2026-11-15')
+check('a custom range is used as given',
+  periodRange('custom', { from: '2026-03-01', to: '2026-04-15' }, nov).to, '2026-04-15')
+check('an incomplete custom range falls back to this month',
+  periodRange('custom', { from: '2026-03-01', to: '' }, nov).from, '2026-11-01')
+
+// A leap February, and the January-to-December wrap.
+check('a leap February ends on the 29th',
+  periodRange('this_month', undefined, new Date(2028, 1, 10)).to, '2028-02-29')
+check('last month from January is December of the year before',
+  periodRange('last_month', undefined, new Date(2026, 0, 5)).from, '2025-12-01')
+check('ending on the 31st of December',
+  periodRange('last_month', undefined, new Date(2026, 0, 5)).to, '2025-12-31')
 
 console.log(
   failures === 0

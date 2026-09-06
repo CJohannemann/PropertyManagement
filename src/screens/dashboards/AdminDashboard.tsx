@@ -4,6 +4,7 @@ import { navigate, type Route } from '../../lib/route'
 import { PropertyDetail, type PropertySummary } from '../PropertyDetail'
 import { RentStatus } from '../RentStatus'
 import { RentOverview } from '../RentOverview'
+import { RentSnapshot } from '../RentSnapshot'
 import { DashboardSections } from '../DashboardSections'
 import { QuickActions } from '../QuickActions'
 import { Upcoming } from '../Upcoming'
@@ -89,10 +90,12 @@ export function AdminDashboard({
     return (
       <div>
         <h2>Rent</h2>
-        <RentOverview
+        <RentSnapshot
           organizationId={organizationId}
           propertyChoices={(properties ?? []).map((p) => ({ id: p.id, name: p.name }))}
+          showFilters
         />
+        <RentOverview organizationId={organizationId} />
         <div style={{ marginTop: '1rem' }}>
           <RentStatus />
         </div>
@@ -193,6 +196,9 @@ export function AdminDashboard({
         organizationId={organizationId}
         onOpenProperty={(id) => navigate('/properties', { id })}
       />
+      <h2 style={{ marginTop: '2rem' }}>This month</h2>
+      <RentSnapshot organizationId={organizationId} />
+
       <div style={{ marginTop: '2rem' }}>
         <Upcoming
           organizationId={organizationId}

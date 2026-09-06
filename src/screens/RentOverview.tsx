@@ -5,18 +5,7 @@ import {
 } from '../lib/analytics'
 import { money } from '../lib/charges'
 
-type Props = {
-  organizationId: string
-  /** Buildings to offer in the filter. Empty hides it — nothing to choose. */
-  propertyChoices?: { id: string; name: string }[]
-}
-
-/** The reporting periods the spec asks for, as month counts. */
-const PERIODS = [
-  { months: 1, label: 'This month' },
-  { months: 3, label: 'Last 3 months' },
-  { months: 12, label: 'Last 12 months' },
-]
+type Props = { organizationId: string }
 
 /**
  * How the business is doing: this month, and the last twelve.
@@ -27,18 +16,16 @@ const PERIODS = [
  * identical, and two overdue numbers disagreeing on one screen is worse
  * than one shown once.
  */
-export function RentOverview({ organizationId, propertyChoices = [] }: Props) {
+export function RentOverview({ organizationId }: Props) {
   const [months, setMonths] = useState<RentMonth[] | null>(null)
-  const [period, setPeriod] = useState(12)
-  const [propertyId, setPropertyId] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setMonths(null)
-    fetchRentSummary(organizationId, period, propertyId || null)
+    fetchRentSummary(organizationId, 12)
       .then(setMonths)
       .catch((e) => setError(errorMessage(e)))
-  }, [organizationId, period, propertyId])
+  }, [organizationId])
 
   // Muted rather than a red banner across the top of the page: this is a
   // summary of what the rent status below already shows in full, so
@@ -72,30 +59,10 @@ export function RentOverview({ organizationId, propertyChoices = [] }: Props) {
   return (
     <div className="card-list">
       <div>
-        {/* Filters in one row above the figures, so it is obvious they
-            govern everything below rather than any one number. */}
-        <div className="filter-row">
-          <select value={period} onChange={(e) => setPeriod(Number(e.target.value))}
-                  aria-label="Reporting period">
-            {PERIODS.map((p) => (
-              <option key={p.months} value={p.months}>{p.label}</option>
-            ))}
-          </select>
-          {propertyChoices.length > 1 && (
-            <select value={propertyId} onChange={(e) => setPropertyId(e.target.value)}
-                    aria-label="Property">
-              <option value="">All properties</option>
-              {propertyChoices.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          )}
-        </div>
-
         <ThisMonth month={thisMonth} />
         <TwelveMonths months={months} />
         <div className="muted" style={{ marginTop: '0.75rem' }}>
-          {periodLabel(months.length)}: {money(collectedYear)} collected of {money(billedEver)} billed
+          Last 12 months: {money(collectedYear)} collected of {money(billedEver)} billed
           {' '}({Math.round((collectedYear / billedEver) * 100)}%)
           {spentYear > 0 && (
             <>
@@ -379,8 +346,3 @@ function cell(align: 'left' | 'right' = 'right'): React.CSSProperties {
   }
 }
 
-/** Names the window in the words the filter used, so the two agree. */
-function periodLabel(monthCount: number): string {
-  const match = PERIODS.find((p) => p.months === monthCount)
-  return match ? match.label : `Last ${monthCount} months`
-}

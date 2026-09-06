@@ -360,3 +360,35 @@ button.link {
   color: var(--fg);
   font-size: 0.9rem;
 }
+
+/* ------------------------------------------------------- stat grid -- */
+
+/*
+ * Two across on a phone, four on anything wider. The four figures are the
+ * financial snapshot, and reading them as a row of numbers is the point —
+ * as a sentence they have to be picked back out.
+ */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.75rem;
+}
+
+.stat {
+  padding: 0.1rem 0;
+}
+
+.stat.is-tappable {
+  cursor: pointer;
+  border-radius: 8px;
+  /* A little breathing room so the whole figure is a comfortable target,
+   * not just the digits. */
+  padding: 0.4rem 0.5rem;
+  margin: -0.3rem -0.5rem;
+  min-height: 44px;
+}
+
+.stat.is-tappable:hover,
+.stat.is-tappable:focus-visible {
+  background: var(--bg);
+}
