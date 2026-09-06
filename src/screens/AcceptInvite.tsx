@@ -3,7 +3,10 @@ import { useEffect, useState } from 'react'
 import { useSession } from '../lib/useSession'
 import { acceptInvite } from '../lib/org'
 import { navigate } from '../lib/route'
-import { getUrlInviteToken, storePendingInviteToken } from '../lib/inviteLink'
+import {
+  getUrlInviteToken, peekPendingInviteToken, storePendingInviteToken,
+  clearPendingInviteToken,
+} from '../lib/inviteLink'
 
 /**
  * Landing screen for an invite link (?token=...). If the visitor is
@@ -16,7 +19,11 @@ export function AcceptInvite() {
   const { session, checking } = useSession()
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
-  const token = getUrlInviteToken()
+  // The URL first, then whatever was stashed on the way through sign-up.
+  // The fallback matters when the confirmation email is opened somewhere
+  // that strips the query string, and when someone reaches this screen a
+  // second time without the original link to hand.
+  const token = getUrlInviteToken() ?? peekPendingInviteToken()
 
   useEffect(() => {
     if (checking) return
@@ -30,6 +37,10 @@ export function AcceptInvite() {
     }
     acceptInvite(token)
       .then(() => {
+        // Only on success. A failure here can be a dropped connection as
+        // easily as a spent invite, and throwing the token away would turn
+        // the first into the second.
+        clearPendingInviteToken()
         setDone(true)
         navigate('/dashboard', { replace: true })
       })
@@ -42,7 +53,20 @@ export function AcceptInvite() {
     <div className="auth-page">
       <div className="auth-card">
         <h1>Accepting invite</h1>
-        {error && <p className="error-text">{error}</p>}
+        {error && (
+          <>
+            <p className="error-text">{error}</p>
+            <p className="muted">
+              Ask whoever invited you to send a new link — invites expire
+              after seven days and can only be used once.
+            </p>
+            {session && (
+              <button className="link" onClick={() => navigate('/dashboard')}>
+                Go to the app
+              </button>
+            )}
+          </>
+        )}
         {!error && !session && (
           <>
             <p className="muted" style={{ marginBottom: '1rem' }}>

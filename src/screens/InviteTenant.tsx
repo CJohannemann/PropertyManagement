@@ -1,6 +1,7 @@
 import { errorMessage } from '../lib/supabase'
 import { useState } from 'react'
 import { createInvite } from '../lib/org'
+import { inviteUrlFor } from '../lib/inviteLink'
 
 type Props = { leaseId: string; onDone: () => void }
 
@@ -17,10 +18,10 @@ export function InviteTenant({ leaseId, onDone }: Props) {
     setError(null)
     try {
       const { token } = await createInvite(email, 'tenant', leaseId, fullName)
-      // Shown as a copyable link rather than emailed: GoTrue's SMTP isn't
-      // configured yet, and an invite that silently fails to send is worse
-      // than one you hand over yourself.
-      setLink(`${window.location.origin}/accept-invite?token=${token}`)
+      // Shown as a copyable link rather than emailed: nothing sends invite
+      // mail yet. (GoTrue has SMTP for its own confirmation and reset
+      // messages, but sending an invite is this app's job, not its.)
+      setLink(inviteUrlFor(token))
     } catch (err) {
       setError(errorMessage(err))
     }

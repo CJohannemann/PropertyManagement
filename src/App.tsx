@@ -3,7 +3,7 @@ import { useSession } from './lib/useSession'
 import { useRoute, navigate, SIGNED_IN_ONLY } from './lib/route'
 import { supabaseConfigured } from './lib/supabase'
 import { acceptInvite } from './lib/org'
-import { takePendingInviteToken } from './lib/inviteLink'
+import { peekPendingInviteToken, clearPendingInviteToken } from './lib/inviteLink'
 import { SignIn } from './screens/SignIn'
 import { SignUp } from './screens/SignUp'
 import { Setup } from './screens/Setup'
@@ -48,9 +48,17 @@ export default function App() {
     }
 
     if (route === '/login' || route === '/signup' || route === '/') {
-      const pending = takePendingInviteToken()
+      const pending = peekPendingInviteToken()
       if (pending) {
-        acceptInvite(pending).finally(() => navigate('/dashboard', { replace: true }))
+        // Cleared on success only, and deliberately not on failure: this
+        // swallows the error either way, and a token dropped because the
+        // network hiccuped is an invite nobody can accept again. Setup.tsx
+        // is where a still-pending token gets a second chance, with the
+        // reason shown.
+        acceptInvite(pending)
+          .then(clearPendingInviteToken)
+          .catch(() => {})
+          .finally(() => navigate('/dashboard', { replace: true }))
       } else {
         navigate('/dashboard', { replace: true })
       }
