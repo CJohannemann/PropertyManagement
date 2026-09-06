@@ -3,7 +3,7 @@
 -- Until now nothing could tell this system a tenant had paid. `payments`
 -- has no client-facing insert policy on purpose — only the Stripe webhook
 -- writes it, so a compromised browser cannot declare its own rent paid —
--- and no other path existed. A landlord handed a cheque had no way to say
+-- and no other path existed. A landlord handed a check had no way to say
 -- so: the charge stayed unpaid, went overdue, and on any lease with
 -- late_fee_auto_apply on it started billing late fees for money already
 -- in their hand.
@@ -35,7 +35,7 @@ end $$;
 -- useful detail, not the identity of the payment.
 alter table payments alter column tenant_member_id drop not null;
 
--- A cheque number, a Zelle reference, "left in the dropbox" — whatever
+-- A check number, a Zelle reference, "left in the dropbox" — whatever
 -- makes this findable again in six months.
 alter table payments add column if not exists note text;
 

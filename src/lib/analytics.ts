@@ -6,7 +6,7 @@ export type RentMonth = {
   billed: number
   collected: number
   outstanding: number
-  /** Maintenance spend recorded that month: parts, mileage, and paid labour. */
+  /** Maintenance spend recorded that month: parts, mileage, and paid labor. */
   spent: number
 }
 

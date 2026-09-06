@@ -60,7 +60,7 @@ export function RentStatus() {
   // charges · 2 overdue" directly beneath a Needs Attention item saying
   // "1 tenant has overdue rent · $2,280" and a rent overview saying
   // "$2,280 still to come in" — the same figure three times in one screen,
-  // which is how a command centre turns into a data dump. This screen's job
+  // which is how a command center turns into a data dump. This screen's job
   // is the breakdown; the totals belong to the sections above it.
   return (
     <div>
@@ -231,7 +231,7 @@ function PaymentLine({
  * A unit's last twelve months at a glance — one cell per month, so a
  * tenant who is repeatedly late looks different from one who missed once.
  *
- * Colour is not the only carrier: every cell states its month and figures
+ * Color is not the only carrier: every cell states its month and figures
  * in its title, the selected month reads out in words below, and an empty
  * month is drawn as an outline rather than a shade.
  */

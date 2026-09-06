@@ -67,8 +67,8 @@ select assert(
 insert into rent_charges (lease_id, charge_type, due_date, amount)
 values (:'lease', 'rent', current_date, 1200) returning id as charge \gset
 
--- Recorded by hand, which is the path a cheque takes.
-select record_manual_payment(:'charge', 1200, 'check', current_date, 'cheque 1041');
+-- Recorded by hand, which is the path a check takes.
+select record_manual_payment(:'charge', 1200, 'check', current_date, 'check 1041');
 
 select assert(
   (select count(*) from notifications
@@ -153,7 +153,7 @@ select assert((select count(*) from recent_activity(:'org', 20)) >= 3,
 
 select assert(
   (select count(*) from recent_activity(:'org', 20) where kind = 'payment') = 1,
-  'the cheque shows as a payment');
+  'the check shows as a payment');
 select assert(
   (select count(*) from recent_activity(:'org', 20) where kind = 'request') = 2,
   'both repair reports show');

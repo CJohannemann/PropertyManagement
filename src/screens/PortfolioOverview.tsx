@@ -8,7 +8,7 @@ type Props = {
 }
 
 /**
- * The portfolio at a glance: what is let, what it earns, and where the
+ * The portfolio at a glance: what is rented, what it earns, and where the
  * problems are.
  *
  * Occupancy is derived from active leases. units.status exists and looks
@@ -92,13 +92,13 @@ function PropertyLine({ property, onClick }: { property: PropertyRow; onClick: (
 
   // Red for money already late or an urgent repair, amber for anything else
   // wanting a look, otherwise green. Stated in words underneath too — a dot
-  // on its own is unreadable to a colour-blind reader and meaningless to a
+  // on its own is unreadable to a color-blind reader and meaningless to a
   // screen reader.
   const status = overdue > 0 || property.urgent_maintenance > 0 ? 'urgent'
     : property.open_maintenance > 0 || property.vacant > 0 ? 'attention'
       : 'fine'
 
-  const COLOUR = {
+  const COLOR = {
     urgent: 'var(--danger)',
     attention: 'var(--series-outstanding)',
     fine: 'var(--series-collected)',
@@ -123,12 +123,12 @@ function PropertyLine({ property, onClick }: { property: PropertyRow; onClick: (
         <span style={{ display: 'flex', gap: '0.6rem', alignItems: 'baseline' }}>
           <span aria-hidden="true" style={{
             width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
-            background: COLOUR[status],
+            background: COLOR[status],
           }} />
           <strong>{property.name}</strong>
         </span>
         <span className="muted" style={{ margin: 0, whiteSpace: 'nowrap' }}>
-          {property.occupied}/{property.units} let
+          {property.occupied} of {property.units} rented
         </span>
       </div>
       <div className="muted" style={{ marginLeft: '1.5rem' }}>

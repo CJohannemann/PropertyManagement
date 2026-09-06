@@ -85,7 +85,7 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
           <div key={r.id}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
               <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'baseline' }}>
-                {/* Severity at a glance, but never colour alone — the
+                {/* Severity at a glance, but never color alone — the
                     priority is spelled out on the right of the same row. */}
                 <span aria-hidden="true" style={{
                   width: 9, height: 9, borderRadius: '50%', flexShrink: 0,

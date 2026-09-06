@@ -74,7 +74,7 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
             <div className="muted">
               {Number(totals.total_hours)} hour(s) · {Number(totals.total_miles)} mile(s)
             </div>
-            {/* Labour is counted but not priced: technicians are paid
+            {/* Labor is counted but not priced: technicians are paid
                 outside the app, so pricing hours here would produce a
                 total that looks authoritative and is wrong. */}
             <div className="muted">
@@ -200,7 +200,7 @@ function AddEntry({
         // rejects an entry that carries nothing measurable.
         hours: type === 'labor' ? num(hours) : null,
         miles: type === 'mileage' ? num(miles) : null,
-        // Both materials and labour can carry a cost now; the database has
+        // Both materials and labor can carry a cost now; the database has
         // always allowed it and job_totals has always counted it.
         cost: type === 'material' || type === 'labor' ? num(cost) : null,
         vendor: type === 'material' ? (vendor.trim() || null) : null,

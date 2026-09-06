@@ -126,7 +126,7 @@ export function NeedsAttention({ summary, onViewRent, onViewMaintenance }: Props
           style={{ cursor: 'pointer' }}
         >
           <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'baseline' }}>
-            {/* Urgency is never colour alone — the dot is labelled for a
+            {/* Urgency is never color alone — the dot is labelled for a
                 screen reader and every item states its own severity in
                 words. */}
             <span aria-hidden="true" style={{

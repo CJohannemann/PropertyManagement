@@ -231,7 +231,7 @@ select assert_rejected(
 
 -- ------------------------------------------ recording money by hand --
 
--- The case this exists for: a tenant hands over a cheque. Before
+-- The case this exists for: a tenant hands over a check. Before
 -- record_manual_payment there was no way to tell the app, so the charge
 -- went overdue and started accruing late fees against money already
 -- received. See db/migrations/018_manual_payments.sql.
@@ -240,11 +240,11 @@ insert into rent_charges (lease_id, charge_type, due_date, amount)
 values (:'lease', 'rent', '2026-07-01', 1200) returning id as charge6 \gset
 
 select set_config('request.jwt.uid', '11111111-1111-1111-1111-111111111111', false);
-select record_manual_payment(:'charge6', 500, 'check', '2026-07-02', 'cheque 1041')
+select record_manual_payment(:'charge6', 500, 'check', '2026-07-02', 'check 1041')
   as part_payment \gset
 
 select assert((select amount_paid from rent_charges where id = :'charge6') = 500,
-  'a recorded cheque credits the ledger, got '
+  'a recorded check credits the ledger, got '
   || (select amount_paid::text from rent_charges where id = :'charge6'));
 select assert((select status from rent_charges where id = :'charge6') = 'partial',
   'and leaves the charge partial');

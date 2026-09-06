@@ -59,7 +59,7 @@ begin
 end $$;
 
 -- What a job has cost so far: materials at their recorded cost, plus
--- mileage valued at the organization's rate. Labour hours are counted but
+-- mileage valued at the organization's rate. Labor hours are counted but
 -- not priced — technicians here are paid outside the app, and inventing a
 -- rate would produce a total that looks authoritative and is wrong.
 create or replace function job_totals(job uuid)

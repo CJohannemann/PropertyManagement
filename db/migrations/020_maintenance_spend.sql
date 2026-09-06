@@ -20,9 +20,9 @@ drop function if exists rent_summary(uuid, int);
 -- organization's rate — so a job's own total and this roll-up can never
 -- disagree. Note that job_totals sums cost across EVERY entry type, not
 -- just materials, which is what lets a technician's invoice be recorded
--- against the labour entry it belongs to.
+-- against the labor entry it belongs to.
 --
--- Labour hours with no cost contribute nothing, deliberately. Hours worked
+-- Labor hours with no cost contribute nothing, deliberately. Hours worked
 -- and money owed are different claims, and pricing hours at an invented
 -- rate would produce a net figure that looks authoritative and is wrong.
 create or replace function rent_summary(org uuid, month_count int default 12)

@@ -11,7 +11,7 @@ export const stripe = new Stripe(config.stripe.secretKey)
  *
  * Written as controller properties rather than `type: 'express'`: Stripe
  * now treats the account types as legacy and tells new platforms not to
- * use them. These values reproduce Express behaviour — Stripe-hosted
+ * use them. These values reproduce Express behavior — Stripe-hosted
  * onboarding, Express dashboard — with one deliberate difference:
  *
  *   losses.payments: 'stripe'

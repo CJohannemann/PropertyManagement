@@ -14,7 +14,7 @@ type Props = {
 /**
  * Recording rent that arrived outside the app.
  *
- * The thing this prevents: a tenant hands over a cheque, nothing in the
+ * The thing this prevents: a tenant hands over a check, nothing in the
  * system knows, and the charge goes overdue — billing late fees against
  * money the landlord is already holding.
  */
@@ -23,7 +23,7 @@ export function RecordPayment({ charge, onRecorded, onCancel }: Props) {
   // Defaults to settling the charge, which is what usually happened.
   const [amount, setAmount] = useState(String(owed.toFixed(2)))
   const [method, setMethod] = useState<string>('check')
-  // Backdatable: the cheque was probably handed over before anyone sat
+  // Backdatable: the check was probably handed over before anyone sat
   // down to type it in.
   const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10))
   const [note, setNote] = useState('')
@@ -84,7 +84,7 @@ export function RecordPayment({ charge, onRecorded, onCancel }: Props) {
       <div className="field">
         <label htmlFor={`note-${charge.id}`}>Reference (optional)</label>
         <input id={`note-${charge.id}`} type="text" value={note}
-               placeholder="Cheque number, or where it came from"
+               placeholder="Check number, or where it came from"
                onChange={(e) => setNote(e.target.value)} />
         <span className="muted">
           Whatever makes this findable again in six months.

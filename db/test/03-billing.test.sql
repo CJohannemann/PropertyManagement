@@ -1,5 +1,5 @@
 -- Rent billing: generation, late fee accrual, and move-in charges.
--- Covers the behaviour verified by hand when each was built, so a future
+-- Covers the behavior verified by hand when each was built, so a future
 -- change that breaks it fails here instead of in someone's rent.
 
 insert into auth.users (id, email) values

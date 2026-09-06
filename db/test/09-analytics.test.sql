@@ -135,11 +135,11 @@ values (:'job_a', :'member_a', 'mileage', 'Trip for the part', 20);
 insert into job_entries (job_id, technician_id, entry_type, description, hours, cost)
 values (:'job_a', :'member_a', 'labor', 'Fitted the tap', 1.5, 75);
 
--- 40 parts + (20 x 0.70) mileage + 75 labour = 129
+-- 40 parts + (20 x 0.70) mileage + 75 labor = 129
 select assert(
   (select spent from rent_summary(:'org_a', 12)
     where month = date_trunc('month', current_date)::date) = 129,
-  'spend counts parts, mileage at the org rate, and the labour invoice, got '
+  'spend counts parts, mileage at the org rate, and the labor invoice, got '
   || (select spent::text from rent_summary(:'org_a', 12)
        where month = date_trunc('month', current_date)::date));
 

@@ -178,7 +178,7 @@ export function TenantDashboard({ memberId }: Props) {
                 {Number(c.amount_paid) > 0 && ` · ${money(Number(c.amount_paid))} paid`}
                 {outstanding(c) > 0 && ` · ${money(outstanding(c))} left`}
               </div>
-              {/* So a tenant can see their landlord recorded the cheque
+              {/* So a tenant can see their landlord recorded the check
                   they handed over, without having to ask. Voided payments
                   are left out — an entry made and unmade is the landlord's
                   correction, not something the tenant did. */}

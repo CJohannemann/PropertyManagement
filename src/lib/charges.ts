@@ -51,7 +51,7 @@ export type PaymentRow = {
 }
 
 export const PAYMENT_METHODS = [
-  { value: 'check', label: 'Cheque' },
+  { value: 'check', label: 'Check' },
   { value: 'cash', label: 'Cash' },
   { value: 'bank_transfer', label: 'Bank transfer' },
   { value: 'other', label: 'Something else' },
@@ -59,7 +59,7 @@ export const PAYMENT_METHODS = [
 
 const METHOD_LABELS: Record<PaymentRow['method'], string> = {
   ach: 'bank transfer', card: 'card', cash: 'cash',
-  check: 'cheque', bank_transfer: 'bank transfer', other: 'other',
+  check: 'check', bank_transfer: 'bank transfer', other: 'other',
 }
 
 export function methodLabel(m: PaymentRow['method']): string {
@@ -129,7 +129,7 @@ export {
 } from './owed'
 
 /**
- * Records rent that arrived outside the app — a cheque, cash, a bank
+ * Records rent that arrived outside the app — a check, cash, a bank
  * transfer someone sent directly.
  *
  * Goes through record_manual_payment() rather than inserting a row,

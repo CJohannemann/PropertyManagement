@@ -83,7 +83,7 @@ export function NotificationBell({ organizationId }: Props) {
               style={{ cursor: n.link ? 'pointer' : 'default' }}
             >
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'baseline' }}>
-                {/* Urgency is never colour alone: high-priority rows say so
+                {/* Urgency is never color alone: high-priority rows say so
                     in their title, which the trigger writes. */}
                 {n.urgency === 'high' && (
                   <span aria-hidden="true" style={{

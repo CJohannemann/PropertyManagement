@@ -216,12 +216,12 @@ function TwelveMonths({ months }: { months: RentMonth[] }) {
         </button>
       </div>
 
-      {/* Identity is never colour alone: a legend for the two series, and
-          the table view below carries the same numbers without colour. */}
+      {/* Identity is never color alone: a legend for the two series, and
+          the table view below carries the same numbers without color. */}
       <div style={{ display: 'flex', gap: '1rem', margin: '0.5rem 0' }}>
-        <Key colour="var(--series-collected)" label="Collected" />
-        <Key colour="var(--series-outstanding)" label="Outstanding" />
-        {anySpend && <Key colour="var(--series-spent)" label="Repairs" />}
+        <Key color="var(--series-collected)" label="Collected" />
+        <Key color="var(--series-outstanding)" label="Outstanding" />
+        {anySpend && <Key color="var(--series-spent)" label="Repairs" />}
       </div>
 
       {asTable ? (
@@ -359,11 +359,11 @@ function TwelveMonths({ months }: { months: RentMonth[] }) {
   )
 }
 
-function Key({ colour, label }: { colour: string; label: string }) {
+function Key({ color, label }: { color: string; label: string }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-      <span style={{ width: 10, height: 10, borderRadius: 2, background: colour }} />
-      {/* Label in text ink, never the series colour. */}
+      <span style={{ width: 10, height: 10, borderRadius: 2, background: color }} />
+      {/* Label in text ink, never the series color. */}
       <span className="muted" style={{ margin: 0 }}>{label}</span>
     </span>
   )
