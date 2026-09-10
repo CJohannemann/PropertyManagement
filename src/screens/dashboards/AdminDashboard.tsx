@@ -82,6 +82,7 @@ export function AdminDashboard({
         canManageUnits
         organizationName={organizationName}
         onBack={() => { navigate('/properties'); load() }}
+        onPropertyChanged={load}
       />
     )
   }

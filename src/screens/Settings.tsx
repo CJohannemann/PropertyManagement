@@ -1,6 +1,6 @@
 import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
-import { fetchOrgMembers, type Membership } from '../lib/org'
+import { fetchOrgMembers, setMemberStatus, type Membership } from '../lib/org'
 import { useThemePreference, THEME_CHOICES } from '../lib/theme'
 import { LeaseTemplates } from './LeaseTemplates'
 import { InviteMember } from './InviteMember'
@@ -51,10 +51,8 @@ export function Settings({ organizationId, canInviteMembers, onBack }: Props) {
     )
   }
 
-  // Tenants are left out. They arrive through a lease, they are listed on
-  // the property they rent, and a roster of everyone who has ever rented
-  // from you is a different screen than "who works here".
   const staff = (members ?? []).filter((m) => m.role !== 'tenant')
+  const renters = (members ?? []).filter((m) => m.role === 'tenant')
 
   return (
     <div>
@@ -96,38 +94,42 @@ export function Settings({ organizationId, canInviteMembers, onBack }: Props) {
 
       {error && <p className="error-text">{error}</p>}
       {members === null && !error && <p className="muted">Loading…</p>}
-      {members !== null && staff.length === 0 && (
-        <p className="empty-state">
-          It's just you so far
-          {canInviteMembers ? ' — invite someone above.' : '.'}
-        </p>
-      )}
-
       {staff.length > 0 && (
         <div className="card-list">
           {staff.map((m) => (
-            <div key={m.id}>
-              <div style={{ display: 'flex', justifyContent: 'space-between',
-                            alignItems: 'baseline', gap: '0.5rem' }}>
-                <strong>{m.full_name ?? 'Unnamed'}</strong>
-                <span className="muted" style={{ margin: 0 }}>
-                  {ROLE_LABEL[m.role]}
-                </span>
-              </div>
-              {/* Only worth a line when it isn't the normal case. */}
-              {m.status !== 'active' && (
-                <div className="muted">
-                  {m.status === 'disabled'
-                    ? 'Disabled — cannot sign in.'
-                    : 'Invited, but has not joined yet.'}
-                </div>
-              )}
-            </div>
+            <MemberRow key={m.id} member={m} onChanged={loadMembers} />
           ))}
         </div>
       )}
 
-      <h3 style={{ marginTop: '2rem' }}>Documents</h3>
+      {/* The viewer is always in the list above, so "empty" here means
+          "nobody but you" rather than nothing at all. */}
+      {members !== null && staff.length <= 1 && canInviteMembers && (
+        <p className="muted" style={{ marginTop: '0.75rem' }}>
+          It's just you so far.
+        </p>
+      )}
+
+      {/* Tenants are listed separately rather than mixed into the team.
+          They are here at all because taking a renter's access away has to
+          be possible somewhere, and the lease screen is about the tenancy
+          — which outlives the login. */}
+      {renters.length > 0 && (
+        <>
+          <h3 style={{ marginTop: '2rem' }}>Tenants</h3>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Removing access signs someone out of the app. It does not end
+            their lease or clear what they owe.
+          </p>
+          <div className="card-list">
+            {renters.map((m) => (
+              <MemberRow key={m.id} member={m} onChanged={loadMembers} />
+            ))}
+          </div>
+        </>
+      )}
+
+      <h3 style={{ marginTop: '2.5rem' }}>Documents</h3>
       <div className="card-list">
         <div
           role="button"
@@ -147,6 +149,74 @@ export function Settings({ organizationId, canInviteMembers, onBack }: Props) {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * One person, and the one thing you can do to them.
+ *
+ * Confirming before removing access, because it is not obvious from the
+ * outside that this is reversible — and because doing it to the wrong row
+ * locks a real person out of their own lease.
+ */
+function MemberRow({
+  member, onChanged,
+}: { member: Membership; onChanged: () => void }) {
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const disabled = member.status === 'disabled'
+
+  async function change(status: 'active' | 'disabled') {
+    setBusy(true)
+    setError(null)
+    try {
+      await setMemberStatus(member.id, status)
+      setConfirming(false)
+      onChanged()
+    } catch (e) {
+      setError(errorMessage(e))
+    }
+    setBusy(false)
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'baseline', gap: '0.5rem' }}>
+        <strong>{member.full_name ?? 'Unnamed'}</strong>
+        <span className="muted" style={{ margin: 0 }}>
+          {ROLE_LABEL[member.role]}
+        </span>
+      </div>
+
+      {/* Only worth a line when it isn't the normal case. */}
+      {member.status === 'invited' && (
+        <div className="muted">Invited, but has not joined yet.</div>
+      )}
+      {disabled && <div className="muted">Access removed — cannot sign in.</div>}
+
+      {error && <p className="error-text">{error}</p>}
+
+      {disabled ? (
+        <button className="link" disabled={busy} onClick={() => change('active')}>
+          {busy ? 'Restoring…' : 'Restore access'}
+        </button>
+      ) : confirming ? (
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <button className="link" disabled={busy} onClick={() => change('disabled')}
+            style={{ color: 'var(--danger)' }}>
+            {busy ? 'Removing…' : 'Yes, remove access'}
+          </button>
+          <button className="link" onClick={() => setConfirming(false)}>Cancel</button>
+        </div>
+      ) : (
+        <button className="link" onClick={() => setConfirming(true)}>
+          Remove access
+        </button>
+      )}
     </div>
   )
 }

@@ -49,6 +49,8 @@ export type LeaseTenant = {
   id: string
   is_primary: boolean
   org_member_id: string
+  /** Joined from org_members, so a lease can name who is on it. */
+  org_members?: { full_name: string | null; status: string } | null
 }
 
 export async function fetchLeasesForUnit(unitId: string): Promise<Lease[]> {
@@ -151,13 +153,21 @@ export async function createLease(input: NewLease): Promise<Lease> {
   return data as unknown as Lease
 }
 
-/** Who's already on a lease — so the UI can say "invited" vs "nobody yet". */
+/**
+ * Who is on a lease, by name.
+ *
+ * A lease can carry more than one tenant — lease_tenants has always been a
+ * separate table with an is_primary flag, and accept_invite() adds each
+ * accepted invite to it — so this is a list, not a count. The primary
+ * tenant sorts first; the rest keep whatever order they joined in.
+ */
 export async function fetchLeaseTenants(leaseId: string): Promise<LeaseTenant[]> {
   if (!supabase) return []
   const { data, error } = await supabase
     .from('lease_tenants')
-    .select('id, is_primary, org_member_id')
+    .select('id, is_primary, org_member_id, org_members(full_name, status)')
     .eq('lease_id', leaseId)
   if (error) throw error
-  return data as LeaseTenant[]
+  return (data as unknown as LeaseTenant[])
+    .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
 }

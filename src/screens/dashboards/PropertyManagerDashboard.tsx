@@ -74,6 +74,7 @@ export function PropertyManagerDashboard({
         canManageUnits={false}
         organizationName={organizationName}
         onBack={() => { navigate('/properties'); load() }}
+        onPropertyChanged={load}
       />
     )
   }

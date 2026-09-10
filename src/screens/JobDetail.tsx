@@ -1,7 +1,7 @@
 import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import {
-  fetchJobEntries, addJobEntry, fetchJobTotals, setJobStatus,
+  fetchJobEntries, addJobEntry, fetchJobTotals, setJobStatus, respondToJob,
   uploadReceipt, listReceipts, receiptUrl,
   type Job, type JobEntry, type JobTotals,
 } from '../lib/maintenance'
@@ -54,7 +54,16 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
 
       {error && <p className="error-text">{error}</p>}
 
-      {canEdit && job.status !== 'completed' && (
+      {/* An unanswered offer is the only thing on screen until it is
+          answered. Showing "Start work" beside "Accept" invites someone to
+          start a job they have not taken, which is how a job ends up
+          half-done and still sitting in the queue as unaccepted. */}
+      {canEdit && job.status === 'offered' && (
+        <JobOffer job={job} onError={setError} onChanged={onChanged} />
+      )}
+
+      {canEdit && job.status !== 'offered'
+        && job.status !== 'completed' && job.status !== 'declined' && (
         <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
           {job.status !== 'in_progress' && (
             <button className="link" onClick={async () => {
@@ -121,6 +130,74 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
           {receipts.map((p) => <ReceiptRow key={p} path={p} />)}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Answering an offered job.
+ *
+ * Declining asks for a reason, and the reason is optional. Requiring one
+ * would mean a technician who is simply busy either invents something or
+ * leaves the job sitting unanswered, and an unanswered job is worse for
+ * everyone than a bare "no".
+ */
+function JobOffer({
+  job, onError, onChanged,
+}: { job: Job; onError: (m: string) => void; onChanged: () => void }) {
+  const [declining, setDeclining] = useState(false)
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function respond(accept: boolean) {
+    setBusy(true)
+    try {
+      await respondToJob(job.id, accept, reason)
+      onChanged()
+    } catch (e) {
+      onError(errorMessage(e))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card-list">
+      <div>
+        <strong>This job is waiting for your answer</strong>
+        <p className="muted" style={{ marginTop: '0.25rem' }}>
+          Accepting books it in. Declining sends it back to the office to
+          give to someone else.
+        </p>
+
+        {declining ? (
+          <>
+            <div className="field">
+              <label htmlFor="decline-why">Why? (optional)</label>
+              <input id="decline-why" type="text" value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Booked up until Thursday" />
+            </div>
+            <button className="primary" disabled={busy}
+              onClick={() => respond(false)}>
+              {busy ? 'Sending…' : 'Decline this job'}
+            </button>
+            <button className="link" type="button" style={{ marginTop: '0.5rem' }}
+              onClick={() => setDeclining(false)}>
+              Cancel
+            </button>
+          </>
+        ) : (
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <button className="primary" style={{ width: 'auto', padding: '0.65rem 1.25rem' }}
+              disabled={busy} onClick={() => respond(true)}>
+              {busy ? 'Accepting…' : 'Accept'}
+            </button>
+            <button className="link" disabled={busy} onClick={() => setDeclining(true)}>
+              Decline
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

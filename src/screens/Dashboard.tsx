@@ -98,11 +98,17 @@ export function Dashboard({ section, propertyId }: Props) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {/* The bell is for everyone. It was admin/PM-only because every
+              notification was raised with org_member_id null, so those
+              were the only rows anyone could read. Migration 027 raises
+              notifications addressed to a single member — a tenant told
+              their repair is booked in, a technician offered a job — and
+              hiding the bell from them would mean writing those rows and
+              then never showing them. The RLS policy in 023 already
+              scopes it: an unaddressed notification stays management-only. */}
+          <NotificationBell organizationId={membership.organization_id} />
           {(membership.role === 'admin' || membership.role === 'property_manager') && (
-            <>
-              <NotificationBell organizationId={membership.organization_id} />
-              <NotificationsToggle memberId={membership.id} />
-            </>
+            <NotificationsToggle memberId={membership.id} />
           )}
           {/* Only admins and property managers have a /settings screen —
               the other two dashboards ignore the section entirely — so

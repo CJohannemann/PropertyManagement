@@ -1,7 +1,9 @@
-import { errorMessage } from '../lib/supabase'
+import { errorMessage, supabase, describeError } from '../lib/supabase'
 import { useEffect, useState } from 'react'
-import { fetchUnits, createUnit, type Unit } from '../lib/units'
-import { fetchLeasesForUnit, fetchLeaseTenants, type Lease } from '../lib/leases'
+import { fetchUnits, createUnit, updateUnit, type Unit } from '../lib/units'
+import {
+  fetchLeasesForUnit, fetchLeaseTenants, type Lease, type LeaseTenant,
+} from '../lib/leases'
 import { LeaseForm } from './LeaseForm'
 import { InviteTenant } from './InviteTenant'
 import { LeaseDocument } from './LeaseDocument'
@@ -18,18 +20,26 @@ export type PropertySummary = {
 
 type Props = {
   property: PropertySummary
-  /** Property managers can do everything here except add/remove units. */
+  /**
+   * Property managers can do everything here except add, remove or edit
+   * units and the property itself — properties_write and units_write are
+   * both admin-only in db/schema.sql.
+   */
   canManageUnits: boolean
   organizationName: string
   onBack: () => void
+  /** Reloads the caller's property list after an edit, so the header here
+   *  and the row it was opened from don't disagree. */
+  onPropertyChanged: () => void
 }
 
 export function PropertyDetail({
-  property, canManageUnits, organizationName, onBack,
+  property, canManageUnits, organizationName, onBack, onPropertyChanged,
 }: Props) {
   const [units, setUnits] = useState<Unit[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [addingUnit, setAddingUnit] = useState(false)
+  const [editingProperty, setEditingProperty] = useState(false)
 
   async function load() {
     try {
@@ -49,7 +59,23 @@ export function PropertyDetail({
       <h2 style={{ marginBottom: 0 }}>{property.name}</h2>
       <p className="muted" style={{ marginTop: '0.25rem' }}>
         {property.address_line1}, {property.city}, {property.state} {property.zip}
+        {canManageUnits && !editingProperty && (
+          <>
+            {' · '}
+            <button className="link" onClick={() => setEditingProperty(true)}>
+              Edit
+            </button>
+          </>
+        )}
       </p>
+
+      {editingProperty && (
+        <PropertyForm
+          property={property}
+          onSaved={() => { setEditingProperty(false); onPropertyChanged() }}
+          onCancel={() => setEditingProperty(false)}
+        />
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3>Units</h3>
@@ -61,9 +87,10 @@ export function PropertyDetail({
       </div>
 
       {addingUnit && (
-        <AddUnitForm
+        <UnitForm
           propertyId={property.id}
-          onAdded={() => { setAddingUnit(false); load() }}
+          onSaved={() => { setAddingUnit(false); load() }}
+          onCancel={() => setAddingUnit(false)}
         />
       )}
 
@@ -78,6 +105,8 @@ export function PropertyDetail({
       <div className="card-list">
         {units?.map((u) => (
           <UnitRow key={u.id} unit={u} property={property}
+            canManageUnits={canManageUnits}
+            onUnitChanged={load}
             organizationName={organizationName} />
         ))}
       </div>
@@ -86,10 +115,17 @@ export function PropertyDetail({
 }
 
 function UnitRow({
-  unit, property, organizationName,
-}: { unit: Unit; property: PropertySummary; organizationName: string }) {
+  unit, property, organizationName, canManageUnits, onUnitChanged,
+}: {
+  unit: Unit
+  property: PropertySummary
+  organizationName: string
+  canManageUnits: boolean
+  onUnitChanged: () => void
+}) {
+  const [editing, setEditing] = useState(false)
   const [leases, setLeases] = useState<Lease[] | null>(null)
-  const [tenantCounts, setTenantCounts] = useState<Record<string, number>>({})
+  const [tenants, setTenants] = useState<Record<string, LeaseTenant[]>>({})
   const [creatingLease, setCreatingLease] = useState(false)
   const [invitingFor, setInvitingFor] = useState<string | null>(null)
   const [viewingDoc, setViewingDoc] = useState<Lease | null>(null)
@@ -100,16 +136,14 @@ function UnitRow({
     try {
       const ls = await fetchLeasesForUnit(unit.id)
       setLeases(ls)
-      // Whether a lease already has someone on it decides between "Invite
-      // tenant" and just showing the count.
-      const counts: Record<string, number> = {}
+      const people: Record<string, LeaseTenant[]> = {}
       const sigs: Record<string, SigningStatus> = {}
       for (const l of ls) {
-        counts[l.id] = (await fetchLeaseTenants(l.id)).length
+        people[l.id] = await fetchLeaseTenants(l.id)
         const st = await fetchSigningStatus(l.id)
         if (st) sigs[l.id] = st
       }
-      setTenantCounts(counts)
+      setTenants(people)
       setSigning(sigs)
     } catch (e) {
       setError(errorMessage(e))
@@ -161,7 +195,22 @@ function UnitRow({
           unit.bathrooms != null ? `${unit.bathrooms} ba` : null,
           unit.sqft != null ? `${unit.sqft} sqft` : null,
         ].filter(Boolean).join(' · ') || 'No details recorded'}
+        {canManageUnits && !editing && (
+          <>
+            {' · '}
+            <button className="link" onClick={() => setEditing(true)}>Edit</button>
+          </>
+        )}
       </div>
+
+      {editing && (
+        <UnitForm
+          propertyId={property.id}
+          unit={unit}
+          onSaved={() => { setEditing(false); onUnitChanged() }}
+          onCancel={() => setEditing(false)}
+        />
+      )}
 
       {error && <p className="error-text">{error}</p>}
 
@@ -169,10 +218,21 @@ function UnitRow({
         <div style={{ marginTop: '0.5rem' }}>
           <div>
             ${activeLease.rent_amount}/mo, due day {activeLease.rent_due_day}
-            {' · '}
-            {tenantCounts[activeLease.id] > 0
-              ? `${tenantCounts[activeLease.id]} tenant(s)`
-              : 'no tenant yet'}
+          </div>
+          {/* Named, not counted. "2 tenant(s)" was true and useless — the
+              question a landlord actually has is which two, and whether
+              the second one ever accepted their invite. */}
+          <div className="muted">
+            {(tenants[activeLease.id]?.length ?? 0) === 0
+              ? 'No tenant yet'
+              : tenants[activeLease.id].map((t, i) => (
+                  <span key={t.id}>
+                    {i > 0 && ', '}
+                    {t.org_members?.full_name ?? 'Unnamed'}
+                    {t.is_primary && ' (primary)'}
+                    {t.org_members?.status === 'disabled' && ' — access removed'}
+                  </span>
+                ))}
           </div>
           <div className="muted">
             {signing[activeLease.id]?.fully_executed
@@ -187,9 +247,16 @@ function UnitRow({
             <button className="link" onClick={() => setViewingDoc(activeLease)}>
               View / sign lease
             </button>
-            {tenantCounts[activeLease.id] === 0 && invitingFor !== activeLease.id && (
+            {/* Offered however many tenants are already on the lease.
+                Gating this on "nobody yet" made a roommate, a spouse or a
+                co-signer impossible to add — lease_tenants has always been
+                a list with an is_primary flag, and the UI was the only
+                thing insisting a lease held one person. */}
+            {invitingFor !== activeLease.id && (
               <button className="link" onClick={() => setInvitingFor(activeLease.id)}>
-                Invite tenant
+                {(tenants[activeLease.id]?.length ?? 0) === 0
+                  ? 'Invite tenant'
+                  : 'Invite another tenant'}
               </button>
             )}
           </div>
@@ -220,11 +287,106 @@ function UnitRow({
   )
 }
 
-function AddUnitForm({ propertyId, onAdded }: { propertyId: string; onAdded: () => void }) {
-  const [label, setLabel] = useState('')
-  const [bedrooms, setBedrooms] = useState('')
-  const [bathrooms, setBathrooms] = useState('')
-  const [sqft, setSqft] = useState('')
+/**
+ * Correcting a property's name or address.
+ *
+ * Editing rather than replacing matters more here than it looks: the
+ * address is what a lease document prints as the premises, and the state
+ * is what the late-fee rules are checked against. A typo fixed here fixes
+ * both, where deleting and re-adding would orphan every unit under it.
+ */
+function PropertyForm({
+  property, onSaved, onCancel,
+}: { property: PropertySummary; onSaved: () => void; onCancel: () => void }) {
+  const [name, setName] = useState(property.name)
+  const [addressLine1, setAddressLine1] = useState(property.address_line1)
+  const [city, setCity] = useState(property.city)
+  const [state, setState] = useState(property.state)
+  const [zip, setZip] = useState(property.zip)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!supabase) return
+    setBusy(true)
+    setError(null)
+    const { error } = await supabase
+      .from('properties')
+      .update({
+        name,
+        address_line1: addressLine1,
+        city,
+        state: state.toUpperCase(),
+        zip,
+      })
+      .eq('id', property.id)
+    if (error) {
+      setError(describeError(error))
+      setBusy(false)
+      return
+    }
+    onSaved()
+  }
+
+  return (
+    <form onSubmit={submit} className="card-list" style={{ marginTop: '0.5rem' }}>
+      <div>
+        <div className="field">
+          <label htmlFor="ep-name">Name</label>
+          <input id="ep-name" required value={name}
+            onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="ep-addr">Address</label>
+          <input id="ep-addr" required value={addressLine1}
+            onChange={(e) => setAddressLine1(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="ep-city">City</label>
+          <input id="ep-city" required value={city}
+            onChange={(e) => setCity(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="ep-state">State (2-letter)</label>
+          <input id="ep-state" required maxLength={2} value={state}
+            onChange={(e) => setState(e.target.value)} />
+          <span className="muted">
+            The state decides which late-fee rules a new lease is checked
+            against.
+          </span>
+        </div>
+        <div className="field">
+          <label htmlFor="ep-zip">ZIP</label>
+          <input id="ep-zip" required value={zip}
+            onChange={(e) => setZip(e.target.value)} />
+        </div>
+        {error && <p className="error-text">{error}</p>}
+        <button className="primary" type="submit" disabled={busy}>
+          {busy ? 'Saving…' : 'Save changes'}
+        </button>
+        <button className="link" type="button" onClick={onCancel}
+          style={{ marginTop: '0.5rem' }}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+}
+
+/** Adds a unit, or corrects one — the same fields either way. */
+function UnitForm({
+  propertyId, unit, onSaved, onCancel,
+}: {
+  propertyId: string
+  unit?: Unit
+  onSaved: () => void
+  onCancel: () => void
+}) {
+  const [label, setLabel] = useState(unit?.label ?? '')
+  const [bedrooms, setBedrooms] = useState(unit?.bedrooms?.toString() ?? '')
+  const [bathrooms, setBathrooms] = useState(unit?.bathrooms?.toString() ?? '')
+  const [sqft, setSqft] = useState(unit?.sqft?.toString() ?? '')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -232,15 +394,16 @@ function AddUnitForm({ propertyId, onAdded }: { propertyId: string; onAdded: () 
     e.preventDefault()
     setBusy(true)
     setError(null)
+    const fields = {
+      label,
+      bedrooms: bedrooms ? Number(bedrooms) : null,
+      bathrooms: bathrooms ? Number(bathrooms) : null,
+      sqft: sqft ? Number(sqft) : null,
+    }
     try {
-      await createUnit({
-        propertyId,
-        label,
-        bedrooms: bedrooms ? Number(bedrooms) : null,
-        bathrooms: bathrooms ? Number(bathrooms) : null,
-        sqft: sqft ? Number(sqft) : null,
-      })
-      onAdded()
+      if (unit) await updateUnit(unit.id, fields)
+      else await createUnit({ propertyId, ...fields })
+      onSaved()
     } catch (err) {
       setError(errorMessage(err))
       setBusy(false)
@@ -271,7 +434,11 @@ function AddUnitForm({ propertyId, onAdded }: { propertyId: string; onAdded: () 
         </div>
         {error && <p className="error-text">{error}</p>}
         <button className="primary" type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Add unit'}
+          {busy ? 'Saving…' : unit ? 'Save changes' : 'Add unit'}
+        </button>
+        <button className="link" type="button" onClick={onCancel}
+          style={{ marginTop: '0.5rem' }}>
+          Cancel
         </button>
       </div>
     </form>

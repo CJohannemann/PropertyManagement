@@ -36,12 +36,30 @@ export function TechnicianDashboard({ memberId }: Props) {
     )
   }
 
-  const open = jobs?.filter((j) => j.status !== 'completed' && j.status !== 'canceled') ?? []
+  // Offers first and separately: they are the only rows that need an
+  // answer, and burying them in a list of work already accepted is how an
+  // offer sits unanswered for three days.
+  const offered = jobs?.filter((j) => j.status === 'offered') ?? []
+  const open = jobs?.filter(
+    (j) => j.status === 'scheduled' || j.status === 'in_progress') ?? []
   const done = jobs?.filter((j) => j.status === 'completed') ?? []
 
   return (
     <div>
-      <h2>Your jobs</h2>
+      {offered.length > 0 && (
+        <>
+          <h2>Waiting for your answer</h2>
+          <div className="card-list">
+            {offered.map((j) => (
+              <JobRow key={j.id} job={j} onOpen={() => setSelected(j)} />
+            ))}
+          </div>
+        </>
+      )}
+
+      <h2 style={{ marginTop: offered.length > 0 ? '2rem' : undefined }}>
+        Your jobs
+      </h2>
       {error && <p className="error-text">{error}</p>}
       {jobs === null && !error && <p className="muted">Loading…</p>}
       {jobs?.length === 0 && (
@@ -55,6 +73,11 @@ export function TechnicianDashboard({ memberId }: Props) {
         <div className="card-list">
           {open.map((j) => <JobRow key={j.id} job={j} onOpen={() => setSelected(j)} />)}
         </div>
+      )}
+      {/* Only when there is something above to explain the emptiness —
+          otherwise the general empty state further up already covers it. */}
+      {open.length === 0 && offered.length > 0 && (
+        <p className="empty-state">Nothing accepted yet.</p>
       )}
 
       {done.length > 0 && (

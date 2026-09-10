@@ -74,6 +74,25 @@ export async function fetchOrgMembers(orgId: string): Promise<Membership[]> {
   return (data as Membership[]).sort((a, b) => ROLE_RANK[a.role] - ROLE_RANK[b.role])
 }
 
+/**
+ * Wraps db/migrations/027's set_member_status().
+ *
+ * Disabling, not deleting: the row carries their signature on a lease,
+ * their name on the charges they paid, and who logged what work. Access
+ * ends at their next page load — fetchMyMemberships() only returns active
+ * memberships — while the record of what they did stays intact.
+ */
+export async function setMemberStatus(
+  memberId: string, status: 'active' | 'disabled',
+): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { error } = await supabase.rpc('set_member_status', {
+    target_member_id: memberId,
+    new_status: status,
+  })
+  if (error) throw error
+}
+
 export async function fetchOrganizationName(orgId: string): Promise<string> {
   if (!supabase) return ''
   const { data, error } = await supabase
