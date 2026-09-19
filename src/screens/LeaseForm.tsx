@@ -1,6 +1,6 @@
 import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
-import { createLease, UTILITY_NAMES } from '../lib/leases'
+import { createLease, updateLease, UTILITY_NAMES, type Lease } from '../lib/leases'
 import { fetchStateRegulation, type StateRegulation } from '../lib/regulations'
 import { proratedFirstPeriod, oneYearTerm } from '../lib/leaseDates'
 
@@ -8,46 +8,66 @@ type Props = {
   unitId: string
   /** The property's state, e.g. 'KY' — drives the late-fee limits below. */
   stateCode: string
+  /**
+   * The lease being corrected, if this is an edit rather than a new lease.
+   * Only ever passed for a lease nobody has signed — see PropertyDetail.
+   */
+  lease?: Lease
   onCreated: () => void
   onCancel: () => void
 }
 
-export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
+/** Numbers arrive as numbers and belong in text inputs as strings. */
+const str = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n))
+
+export function LeaseForm({ unitId, stateCode, lease, onCreated, onCancel }: Props) {
+  const editing = lease !== undefined
   const [reg, setReg] = useState<StateRegulation | null | 'loading'>('loading')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const [startDate, setStartDate] = useState(lease?.start_date ?? '')
+  const [endDate, setEndDate] = useState(lease?.end_date ?? '')
+  // A date input has no clear button on a phone — the picker only ever
+  // hands back a date — so "optional" was a promise the field could not
+  // keep. Saying month-to-month is the actual decision anyway; the empty
+  // end date is just how it is stored.
+  const [monthToMonth, setMonthToMonth] = useState(editing && lease.end_date === null)
   // Once the end date has been set by hand, changing the start date must
   // not silently overwrite it — the auto-fill is a convenience, and
-  // clobbering a deliberate entry is worse than not filling it at all.
-  const [endDateEdited, setEndDateEdited] = useState(false)
-  const [rentAmount, setRentAmount] = useState('')
-  const [rentDueDay, setRentDueDay] = useState('1')
-  const [depositAmount, setDepositAmount] = useState('')
-  const [petDeposit, setPetDeposit] = useState('')
-  const [otherDeposit, setOtherDeposit] = useState('')
-  const [otherDepositLabel, setOtherDepositLabel] = useState('')
-  const [nonrefundableFee, setNonrefundableFee] = useState('')
-  const [nonrefundableFeeLabel, setNonrefundableFeeLabel] = useState('')
-  const [proratedRent, setProratedRent] = useState('')
-  const [proratedEdited, setProratedEdited] = useState(false)
-  const [nsfFee, setNsfFee] = useState('')
-  const [lateFeeAutoApply, setLateFeeAutoApply] = useState(false)
-  const [lateFeeType, setLateFeeType] = useState<'percent' | 'flat'>('percent')
-  const [lateFeeAmount, setLateFeeAmount] = useState('')
-  const [lateFeeGraceDays, setLateFeeGraceDays] = useState('')
-  const [lateFeeDailyAmount, setLateFeeDailyAmount] = useState('')
-  const [lateFeeDailyStartDays, setLateFeeDailyStartDays] = useState('')
+  // clobbering a deliberate entry is worse than not filling it at all. An
+  // existing lease counts as set by hand: someone already chose it.
+  const [endDateEdited, setEndDateEdited] = useState(editing)
+  const [rentAmount, setRentAmount] = useState(str(lease?.rent_amount))
+  const [rentDueDay, setRentDueDay] = useState(editing ? String(lease.rent_due_day) : '1')
+  const [depositAmount, setDepositAmount] = useState(str(lease?.deposit_amount))
+  const [petDeposit, setPetDeposit] = useState(str(lease?.pet_deposit_amount))
+  const [otherDeposit, setOtherDeposit] = useState(str(lease?.other_deposit_amount))
+  const [otherDepositLabel, setOtherDepositLabel] = useState(lease?.other_deposit_label ?? '')
+  const [nonrefundableFee, setNonrefundableFee] = useState(str(lease?.nonrefundable_fee_amount))
+  const [nonrefundableFeeLabel, setNonrefundableFeeLabel] =
+    useState(lease?.nonrefundable_fee_label ?? '')
+  const [proratedRent, setProratedRent] = useState(str(lease?.prorated_rent_amount))
+  const [proratedEdited, setProratedEdited] = useState(editing)
+  const [nsfFee, setNsfFee] = useState(str(lease?.nsf_fee_amount))
+  const [lateFeeAutoApply, setLateFeeAutoApply] = useState(lease?.late_fee_auto_apply ?? false)
+  const [lateFeeType, setLateFeeType] =
+    useState<'percent' | 'flat'>(lease?.late_fee_type ?? 'percent')
+  const [lateFeeAmount, setLateFeeAmount] = useState(str(lease?.late_fee_amount))
+  const [lateFeeGraceDays, setLateFeeGraceDays] = useState(str(lease?.late_fee_grace_days))
+  const [lateFeeDailyAmount, setLateFeeDailyAmount] = useState(str(lease?.late_fee_daily_amount))
+  const [lateFeeDailyStartDays, setLateFeeDailyStartDays] =
+    useState(str(lease?.late_fee_daily_start_days))
   const [smokingPolicy, setSmokingPolicy] =
-    useState<'not_permitted' | 'permitted' | 'outdoors_only'>('not_permitted')
-  const [petsAllowed, setPetsAllowed] = useState(false)
-  const [petsDescription, setPetsDescription] = useState('')
-  const [petRent, setPetRent] = useState('')
-  const [insuranceRequired, setInsuranceRequired] = useState(false)
-  const [parkingDescription, setParkingDescription] = useState('')
-  const [additionalTerms, setAdditionalTerms] = useState('')
+    useState<'not_permitted' | 'permitted' | 'outdoors_only'>(
+      lease?.smoking_policy ?? 'not_permitted')
+  const [petsAllowed, setPetsAllowed] = useState(lease?.pets_allowed ?? false)
+  const [petsDescription, setPetsDescription] = useState(lease?.pets_description ?? '')
+  const [petRent, setPetRent] = useState(str(lease?.pet_rent_amount))
+  const [insuranceRequired, setInsuranceRequired] =
+    useState(lease?.renters_insurance_required ?? false)
+  const [parkingDescription, setParkingDescription] = useState(lease?.parking_description ?? '')
+  const [additionalTerms, setAdditionalTerms] = useState(lease?.additional_terms ?? '')
   const [utilities, setUtilities] =
-    useState<Record<string, 'tenant' | 'landlord' | 'na'>>({})
-  const [feePayer, setFeePayer] = useState<'landlord' | 'tenant'>('landlord')
+    useState<Record<string, 'tenant' | 'landlord' | 'na'>>(lease?.utilities ?? {})
+  const [feePayer, setFeePayer] = useState<'landlord' | 'tenant'>(lease?.fee_payer ?? 'landlord')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -57,7 +77,11 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
         setReg(r)
         // Prefill from the state's own rules rather than hardcoded numbers,
         // so this stays correct as other states get added to the table.
-        if (r) {
+        //
+        // Never when editing: these are suggestions for a blank form, and
+        // applying them to a lease that already has terms would overwrite
+        // what somebody chose with what the state merely permits.
+        if (r && !editing) {
           if (r.max_late_fee_type && r.max_late_fee_type !== 'none') {
             setLateFeeType(r.max_late_fee_type)
             if (r.max_late_fee_value !== null) setLateFeeAmount(String(r.max_late_fee_value))
@@ -67,7 +91,7 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
         }
       })
       .catch((e) => setError(errorMessage(e)))
-  }, [stateCode])
+  }, [stateCode, editing])
 
   const verified = reg !== 'loading' && reg !== null
   const tenantFeeAllowed = verified && reg.tenant_paid_processing_fee_allowed === true
@@ -104,10 +128,13 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
       const num = (s: string) => (s.trim() === '' ? null : Number(s))
       const text = (s: string) => (s.trim() === '' ? null : s.trim())
 
-      await createLease({
+      const fields = {
         unitId,
         startDate,
-        endDate: endDate || null,
+        // Month-to-month wins over whatever the date field happens to hold:
+        // ticking the box is the decision, and the stale date behind it is
+        // only there so unticking can put it back.
+        endDate: monthToMonth ? null : (endDate || null),
         rentAmount: Number(rentAmount),
         rentDueDay: Number(rentDueDay),
         depositAmount: Number(depositAmount || 0),
@@ -137,7 +164,10 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
           Object.entries(utilities).filter(([, who]) => who !== 'na'),
         ),
         additionalTerms: text(additionalTerms),
-      })
+      }
+
+      if (editing) await updateLease(lease.id, fields)
+      else await createLease(fields)
       onCreated()
     } catch (err) {
       setError(errorMessage(err))
@@ -150,7 +180,7 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
   return (
     <form onSubmit={submit} className="card-list" style={{ marginTop: '1rem' }}>
       <div>
-        <h3 style={{ marginTop: 0 }}>New lease</h3>
+        <h3 style={{ marginTop: 0 }}>{editing ? 'Edit lease' : 'New lease'}</h3>
 
         {!verified && (
           <p className="error-text">
@@ -171,13 +201,30 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
             }} />
         </div>
         <div className="field">
-          <label htmlFor="l-end">End date (optional)</label>
-          <input id="l-end" type="date" value={endDate}
-            onChange={(e) => { setEndDateEdited(true); setEndDate(e.target.value) }} />
-          <span className="muted">
-            Defaults to a 12-month term. Clear it for a month-to-month lease.
-          </span>
+          <label>
+            <input type="checkbox" checked={monthToMonth}
+              onChange={(e) => {
+                setMonthToMonth(e.target.checked)
+                // Unticking puts the 12-month default back rather than
+                // leaving an empty required-looking field, unless an end
+                // date was already chosen — then that one returns.
+                if (!e.target.checked && !endDate && startDate) {
+                  setEndDate(oneYearTerm(startDate))
+                }
+              }} />
+            {' '}Month-to-month (no end date)
+          </label>
         </div>
+        {!monthToMonth && (
+          <div className="field">
+            <label htmlFor="l-end">End date</label>
+            <input id="l-end" type="date" value={endDate}
+              onChange={(e) => { setEndDateEdited(true); setEndDate(e.target.value) }} />
+            <span className="muted">
+              Defaults to a 12-month term from the start date.
+            </span>
+          </div>
+        )}
         <div className="field">
           <label htmlFor="l-rent">Monthly rent ($)</label>
           <input id="l-rent" type="number" min="1" step="0.01" required value={rentAmount}
@@ -418,7 +465,7 @@ export function LeaseForm({ unitId, stateCode, onCreated, onCancel }: Props) {
 
         {error && <p className="error-text">{error}</p>}
         <button className="primary" type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Create lease'}
+          {busy ? 'Saving…' : editing ? 'Save changes' : 'Create lease'}
         </button>
         <button className="link" type="button" onClick={onCancel} style={{ marginTop: '0.5rem' }}>
           Cancel

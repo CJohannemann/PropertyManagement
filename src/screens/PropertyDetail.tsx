@@ -127,6 +127,7 @@ function UnitRow({
   const [leases, setLeases] = useState<Lease[] | null>(null)
   const [tenants, setTenants] = useState<Record<string, LeaseTenant[]>>({})
   const [creatingLease, setCreatingLease] = useState(false)
+  const [editingLease, setEditingLease] = useState<string | null>(null)
   const [invitingFor, setInvitingFor] = useState<string | null>(null)
   const [viewingDoc, setViewingDoc] = useState<Lease | null>(null)
   const [signing, setSigning] = useState<Record<string, SigningStatus>>({})
@@ -155,6 +156,13 @@ function UnitRow({
   }, [unit.id])
 
   const activeLease = leases?.find((l) => l.status === 'active') ?? null
+  // Correctable right up until somebody signs it, and not after: a
+  // signature is what turns typed-in terms into an agreement, and the
+  // database stops bringing the charges along at the same moment. See
+  // db/migrations/028_editable_draft_leases.sql.
+  const activeSigning = activeLease ? signing[activeLease.id] : undefined
+  const leaseIsDraft =
+    !activeSigning?.tenant_signed && !activeSigning?.landlord_signed
 
   if (viewingDoc) {
     return (
@@ -214,10 +222,21 @@ function UnitRow({
 
       {error && <p className="error-text">{error}</p>}
 
-      {activeLease ? (
+      {activeLease && editingLease === activeLease.id ? (
+        <LeaseForm
+          unitId={unit.id}
+          stateCode={property.state}
+          lease={activeLease}
+          onCreated={() => { setEditingLease(null); load() }}
+          onCancel={() => setEditingLease(null)}
+        />
+      ) : activeLease ? (
         <div style={{ marginTop: '0.5rem' }}>
           <div>
             ${activeLease.rent_amount}/mo, due day {activeLease.rent_due_day}
+            {activeLease.end_date === null
+              ? ' · month-to-month'
+              : ` · ends ${activeLease.end_date}`}
           </div>
           {/* Named, not counted. "2 tenant(s)" was true and useless — the
               question a landlord actually has is which two, and whether
@@ -243,10 +262,19 @@ function UnitRow({
                   ? 'You have signed — waiting on the tenant'
                   : 'Not signed yet'}
           </div>
-          <div style={{ display: 'flex', gap: '1rem' }}>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
             <button className="link" onClick={() => setViewingDoc(activeLease)}>
               View / sign lease
             </button>
+            {/* Not offered once it is signed, rather than offered and then
+                refused: the answer to "why can't I change this?" is the
+                signature, and a button that only ever errors doesn't say
+                so. */}
+            {leaseIsDraft && (
+              <button className="link" onClick={() => setEditingLease(activeLease.id)}>
+                Edit lease
+              </button>
+            )}
             {/* Offered however many tenants are already on the lease.
                 Gating this on "nobody yet" made a roommate, a spouse or a
                 co-signer impossible to add — lease_tenants has always been

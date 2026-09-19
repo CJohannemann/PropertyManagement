@@ -106,6 +106,45 @@ export const UTILITY_NAMES = [
 ] as const
 
 /**
+ * The lease row a form's worth of input describes. Shared by insert and
+ * update so a field added to one is never quietly missing from the other —
+ * which is exactly how an "edit" that silently drops the pet deposit
+ * happens.
+ */
+function leaseRow(input: NewLease) {
+  return {
+    unit_id: input.unitId,
+    start_date: input.startDate,
+    end_date: input.endDate,
+    rent_amount: input.rentAmount,
+    rent_due_day: input.rentDueDay,
+    deposit_amount: input.depositAmount,
+    pet_deposit_amount: input.petDepositAmount,
+    other_deposit_amount: input.otherDepositAmount,
+    other_deposit_label: input.otherDepositLabel,
+    nonrefundable_fee_amount: input.nonrefundableFeeAmount,
+    nonrefundable_fee_label: input.nonrefundableFeeLabel,
+    prorated_rent_amount: input.proratedRentAmount,
+    nsf_fee_amount: input.nsfFeeAmount,
+    late_fee_auto_apply: input.lateFeeAutoApply,
+    late_fee_type: input.lateFeeType,
+    late_fee_amount: input.lateFeeAmount,
+    late_fee_grace_days: input.lateFeeGraceDays,
+    late_fee_daily_amount: input.lateFeeDailyAmount,
+    late_fee_daily_start_days: input.lateFeeDailyStartDays,
+    fee_payer: input.feePayer,
+    smoking_policy: input.smokingPolicy,
+    pets_allowed: input.petsAllowed,
+    pets_description: input.petsDescription,
+    pet_rent_amount: input.petRentAmount,
+    renters_insurance_required: input.rentersInsuranceRequired,
+    parking_description: input.parkingDescription,
+    utilities: input.utilities,
+    additional_terms: input.additionalTerms,
+  }
+}
+
+/**
  * Inserts a lease. The late-fee and fee-payer fields are re-checked
  * server-side by db/schema.sql's enforce_late_fee_limits trigger against
  * the property's state — the form disables what it can up front, but the
@@ -116,37 +155,30 @@ export async function createLease(input: NewLease): Promise<Lease> {
   if (!supabase) throw new Error('Supabase not configured')
   const { data, error } = await supabase
     .from('leases')
-    .insert({
-      unit_id: input.unitId,
-      start_date: input.startDate,
-      end_date: input.endDate,
-      rent_amount: input.rentAmount,
-      rent_due_day: input.rentDueDay,
-      deposit_amount: input.depositAmount,
-      pet_deposit_amount: input.petDepositAmount,
-      other_deposit_amount: input.otherDepositAmount,
-      other_deposit_label: input.otherDepositLabel,
-      nonrefundable_fee_amount: input.nonrefundableFeeAmount,
-      nonrefundable_fee_label: input.nonrefundableFeeLabel,
-      prorated_rent_amount: input.proratedRentAmount,
-      nsf_fee_amount: input.nsfFeeAmount,
-      status: 'active',
-      late_fee_auto_apply: input.lateFeeAutoApply,
-      late_fee_type: input.lateFeeType,
-      late_fee_amount: input.lateFeeAmount,
-      late_fee_grace_days: input.lateFeeGraceDays,
-      late_fee_daily_amount: input.lateFeeDailyAmount,
-      late_fee_daily_start_days: input.lateFeeDailyStartDays,
-      fee_payer: input.feePayer,
-      smoking_policy: input.smokingPolicy,
-      pets_allowed: input.petsAllowed,
-      pets_description: input.petsDescription,
-      pet_rent_amount: input.petRentAmount,
-      renters_insurance_required: input.rentersInsuranceRequired,
-      parking_description: input.parkingDescription,
-      utilities: input.utilities,
-      additional_terms: input.additionalTerms,
-    })
+    .insert({ ...leaseRow(input), status: 'active' })
+    .select(LEASE_COLUMNS)
+    .single()
+  if (error) throw error
+  return data as unknown as Lease
+}
+
+/**
+ * Corrects a lease that has not been signed.
+ *
+ * `status` is deliberately not sent: what the edit is for is fixing the
+ * terms, and moving a lease between pending/active/ended is a different
+ * decision that shouldn't ride along with a typo fix.
+ *
+ * Charges already generated from the old figures are brought back into
+ * line by the database — see db/migrations/028_editable_draft_leases.sql,
+ * which also explains why it refuses to do so once anyone has signed.
+ */
+export async function updateLease(leaseId: string, input: NewLease): Promise<Lease> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { data, error } = await supabase
+    .from('leases')
+    .update(leaseRow(input))
+    .eq('id', leaseId)
     .select(LEASE_COLUMNS)
     .single()
   if (error) throw error
