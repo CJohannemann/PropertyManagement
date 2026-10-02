@@ -1,0 +1,43 @@
+name: Verify
+
+# Everything `npm run verify` checks, plus lint and the production build,
+# on every push and pull request. The database and API tests start the
+# real supabase/postgres image with Docker, which GitHub's Ubuntu runners
+# already have.
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # --experimental-strip-types, used by the TypeScript tests, needs 22.6+.
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      # Pulled up front so an image or registry problem fails here, clearly,
+      # rather than as a timeout inside the first database test.
+      - name: Pull test database image
+        run: docker pull supabase/postgres:15.1.1.78
+
+      - name: Verify
+        run: npm run verify

@@ -12,89 +12,14 @@
 // ACH payment credits the ledger exactly once no matter how many times,
 // or in what order, Stripe delivers the news.
 //
-// Uses the same supabase/postgres image as db/test/run.mjs, for the same
-// reason: testing against a different database than production is testing
-// something else.
+// The database comes from ./testdb.mjs, shared with api.test.mjs.
 
-import { execFileSync } from 'node:child_process'
-import { readFileSync, readdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { startTestDb, red, green } from './testdb.mjs'
 
-const HERE = dirname(fileURLToPath(import.meta.url))
-const DB = join(HERE, '..', '..', 'db')
 const CONTAINER = 'pm-ledger-test-db'
-const IMAGE = 'supabase/postgres:15.1.1.78'
 const PORT = 5434
-
-const red = (s) => `\x1b[31m${s}\x1b[0m`
-const green = (s) => `\x1b[32m${s}\x1b[0m`
-const dim = (s) => `\x1b[2m${s}\x1b[0m`
-
-const docker = (args, opts = {}) =>
-  execFileSync('docker', args, { encoding: 'utf8', ...opts })
-
-const psql = (sql) =>
-  execFileSync(
-    'docker',
-    ['exec', '-i', CONTAINER, 'psql', '-U', 'postgres', '-d', 'postgres',
-      '-v', 'ON_ERROR_STOP=1', '-qtAX'],
-    { input: `set client_min_messages = warning;\n${sql}`, encoding: 'utf8' },
-  )
-
-function start() {
-  try { docker(['rm', '-f', CONTAINER], { stdio: 'ignore' }) } catch { /* not running */ }
-  console.log(dim(`starting ${IMAGE}…`))
-  docker(
-    ['run', '-d', '--name', CONTAINER, '-e', 'POSTGRES_PASSWORD=test',
-      '-p', `127.0.0.1:${PORT}:5432`, IMAGE],
-    { stdio: 'ignore' },
-  )
-
-  // supabase/postgres runs init scripts against a temporary server, then
-  // shuts it down and starts the real one — so pg_isready alone is a race.
-  // Wait for the image's own init-complete line first. Same reasoning as
-  // db/test/run.mjs; see its comment for the full story.
-  const MARKER = 'PostgreSQL init process complete'
-  let initDone = false
-  for (let i = 0; i < 180; i++) {
-    if (docker(['logs', CONTAINER], { stdio: ['ignore', 'pipe', 'pipe'] }).includes(MARKER)) {
-      initDone = true
-      break
-    }
-    execFileSync('sleep', ['1'])
-  }
-  if (!initDone) throw new Error('Postgres init never completed')
-
-  let streak = 0
-  for (let i = 0; i < 60; i++) {
-    try {
-      docker(['exec', CONTAINER, 'pg_isready', '-U', 'postgres'], { stdio: 'ignore' })
-      if (++streak >= 3) return
-    } catch { streak = 0 }
-    execFileSync('sleep', ['1'])
-  }
-  throw new Error('Postgres never became ready')
-}
-
-function loadSchema() {
-  // GoTrue normally creates these; stand in with the minimum the schema
-  // depends on, same as db/test/run.mjs.
-  psql(`
-    create schema if not exists auth;
-    create table if not exists auth.users (
-      id uuid primary key default gen_random_uuid(), email text);
-    create or replace function auth.uid() returns uuid language sql stable as $$
-      select nullif(current_setting('request.jwt.uid', true), '')::uuid;
-    $$;
-    grant usage on schema auth to anon, authenticated, service_role;
-  `)
-  psql(readFileSync(join(DB, 'schema.sql'), 'utf8'))
-  psql(readFileSync(join(DB, 'seed.sql'), 'utf8'))
-  for (const f of readdirSync(join(DB, 'migrations')).filter((f) => f.endsWith('.sql')).sort()) {
-    psql(readFileSync(join(DB, 'migrations', f), 'utf8'))
-  }
-}
+let psql = () => { throw new Error('database not started') }
+let stopDb = () => {}
 
 // Fixed ids so the assertions can refer to them without a round trip.
 const ORG = '00000000-0000-0000-0000-0000000000a1'
@@ -155,13 +80,14 @@ function intent(id, rentCents, feeCents) {
 }
 
 async function main() {
-  start()
-  loadSchema()
+  const db = startTestDb({ container: CONTAINER, port: PORT })
+  psql = db.psql
+  stopDb = db.stop
   seedFixture()
 
   // Point the API's pool at this container before importing anything that
   // reads config.
-  process.env.API_DATABASE_URL = `postgres://postgres:test@127.0.0.1:${PORT}/postgres`
+  process.env.API_DATABASE_URL = db.url
   process.env.APP_URL = 'https://example.com'
   process.env.JWT_SECRET = 'test'
   process.env.STRIPE_SECRET_KEY = 'sk_test_dummy'
@@ -227,6 +153,6 @@ try {
 } catch (err) {
   console.error(red(`\n${err.message}`))
 } finally {
-  try { docker(['rm', '-f', CONTAINER], { stdio: 'ignore' }) } catch { /* already gone */ }
+  stopDb()
 }
 process.exit(code)

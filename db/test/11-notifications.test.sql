@@ -193,4 +193,66 @@ select assert_rejected(
   format('select * from recent_activity(%L, 20)', :'org2'),
   'and one landlord cannot read another organization''s activity');
 
+-- ------------------------------------------------ money not landing --
+
+-- An ACH debit that bounces days after it was sent. The tenant thinks rent
+-- is paid and the landlord has stopped looking for it, so this is the one
+-- payment event nobody would otherwise notice.
+reset role;
+select set_config('request.jwt.uid', '11111111-1111-1111-1111-1111111111ff', false);
+
+insert into rent_charges (lease_id, charge_type, due_date, amount)
+values (:'lease', 'rent', current_date + 30, 1200) returning id as charge2 \gset
+insert into payments (lease_id, tenant_member_id, rent_charge_id, amount,
+                      processing_fee_amount, total_charged, method, status,
+                      stripe_payment_intent_id)
+values (:'lease', :'tenant_member', :'charge2', 1200, 6, 1206, 'ach', 'processing',
+        'pi_ach_fails')
+returning id as bounced \gset
+
+select assert(
+  (select count(*) from notifications where kind = 'payment_failed') = 0,
+  'a payment still in flight has not failed yet');
+
+update payments set status = 'failed', failure_reason = 'insufficient funds'
+ where id = :'bounced';
+
+select assert(
+  (select count(*) from notifications
+    where organization_id = :'org' and kind = 'payment_failed') = 1,
+  'a bounced payment raises a notification');
+select assert(
+  (select urgency from notifications where kind = 'payment_failed') = 'high',
+  'and it is urgent: the rent is owed again');
+select assert(
+  (select body from notifications where kind = 'payment_failed')
+    like '% — 1200.00 (insufficient funds). The balance is owed again.',
+  'it says how much and why, got '
+  || (select body from notifications where kind = 'payment_failed'));
+select assert(
+  (select link from notifications where kind = 'payment_failed') = '/rent',
+  'and opens on rent');
+
+-- Same reasoning as success: Stripe redelivers, and a failure must not
+-- turn into a stream of alarms.
+update payments set status = 'failed' where id = :'bounced';
+select assert(
+  (select count(*) from notifications where kind = 'payment_failed') = 1,
+  'a redelivered failure does not notify twice');
+
+-- A card declined outright is inserted already failed, never processing.
+insert into payments (lease_id, tenant_member_id, rent_charge_id, amount,
+                      processing_fee_amount, total_charged, method, status,
+                      stripe_payment_intent_id)
+values (:'lease', :'tenant_member', :'charge2', 1200, 35, 1235, 'card', 'failed',
+        'pi_card_declined');
+select assert(
+  (select count(*) from notifications where kind = 'payment_failed') = 2,
+  'a payment that fails on the spot notifies too');
+
+select assert(
+  (select count(*) from notifications
+    where organization_id = :'org2' and kind = 'payment_failed') = 0,
+  'and only the landlord whose tenant it was hears about it');
+
 select assert(true, 'activity tests completed');
