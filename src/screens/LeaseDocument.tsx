@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { supabase, errorMessage } from '../lib/supabase'
 import { money } from '../lib/charges'
 import { fetchDefaultTemplate, type TemplateWithClauses } from '../lib/leaseTemplates'
@@ -19,6 +19,12 @@ type Props = {
    */
   signable?: boolean
   onSigned?: () => void
+  /**
+   * What to tell the reader above the document. Defaults to the
+   * landlord's note about printing and replacing placeholder clauses —
+   * which means nothing to a tenant, so their screen passes its own.
+   */
+  intro?: ReactNode
 }
 
 type PartyRow = { full_name: string | null; is_primary: boolean }
@@ -38,7 +44,7 @@ type PartyRow = { full_name: string | null; is_primary: boolean }
  */
 export function LeaseDocument({
   lease, propertyName, premises, stateCode, organizationName, onClose,
-  signable = false, onSigned,
+  signable = false, onSigned, intro,
 }: Props) {
   const [parties, setParties] = useState<PartyRow[] | null>(null)
   const [template, setTemplate] = useState<TemplateWithClauses | null | 'loading'>('loading')
@@ -248,12 +254,16 @@ export function LeaseDocument({
         </button>
       </div>
 
-      <p className="muted no-print" style={{ maxWidth: '7.5in', margin: '0 auto 1rem' }}>
-        Choose "Save as PDF" as the destination in the print dialog to get a
-        file you can send. This is a draft for signature — review it before
-        sending, and replace the placeholder clause text with your own lease
-        agreement.
-      </p>
+      <div className="muted no-print lease-doc-intro">
+        {intro ?? (
+          <p style={{ margin: 0 }}>
+            Choose "Save as PDF" as the destination in the print dialog to
+            get a file you can send. This is a draft for signature — review
+            it before sending, and replace the placeholder clause text with
+            your own lease agreement.
+          </p>
+        )}
+      </div>
 
       <article className="lease-doc">
         <h1>Residential Lease Agreement</h1>

@@ -68,29 +68,19 @@ export function TenantLease({ leaseId, onBack }: Props) {
   if (error) return <p className="error-text">{error}</p>
   if (!lease || !place) return <p className="muted">Loading your lease…</p>
 
+  // Handed to LeaseDocument rather than rendered above it: the document
+  // already has its own Back link, and a second one here stacked two
+  // "← Back" links on top of each other.
+  const intro = status?.fully_executed
+    ? 'This lease is fully signed. Use Print / Save as PDF to keep a copy.'
+    : status?.tenant_signed
+      ? 'You have signed. Waiting for your landlord to countersign.'
+      : 'Read this agreement, then sign at the bottom. Nothing is agreed until you do.'
+
   return (
     <div>
-      <div className="no-print">
-        <button className="link" onClick={onBack}>← Back</button>
-        {status && !status.tenant_signed && (
-          <p className="muted">
-            Read this agreement, then sign at the bottom. Nothing is agreed
-            until you do.
-          </p>
-        )}
-        {status?.tenant_signed && !status.landlord_signed && (
-          <p className="muted">
-            You have signed. Waiting for your landlord to countersign.
-          </p>
-        )}
-        {status?.fully_executed && (
-          <p className="muted">
-            This lease is fully signed. Use Print / Save as PDF to keep a copy.
-          </p>
-        )}
-      </div>
-
       <LeaseDocument
+        intro={intro}
         lease={lease}
         propertyName={place.propertyName}
         premises={place.premises}

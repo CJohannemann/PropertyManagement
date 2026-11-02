@@ -146,6 +146,11 @@ button.link {
   margin: 0 auto 1rem;
 }
 
+.lease-doc-intro {
+  max-width: 7.5in;
+  margin: 0 auto 1rem;
+}
+
 /*
  * Sized in inches, not pixels: this is measured against paper, and 7.5in
  * is US Letter minus half-inch margins. On screen it just reads as a
@@ -185,6 +190,28 @@ button.link {
   margin-bottom: 0.35rem;
 }
 .sig-date { color: var(--muted); margin-top: 0.35rem; }
+
+/*
+ * On a phone, the paper margins above (0.75in a side) plus the page's own
+ * padding left about 150px for the text — a word or two per line, with a
+ * table cell wrapping "Total due at signing" onto three lines. Here the
+ * document runs edge to edge instead, the way a document app shows a page
+ * on a phone. Print is unaffected: its rules below set their own sizes.
+ */
+@media screen and (max-width: 640px) {
+  .lease-doc-overlay { padding: 0; }
+  .lease-doc {
+    /* Cancels .app-main's 1.5rem side padding, so the page meets the
+       screen edges. */
+    margin: 0 -1.5rem;
+    padding: 1.75rem 1.25rem;
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+  }
+  .lease-doc h1 { font-size: 1.25rem; }
+  .lease-doc-sub { margin-bottom: 1.5rem; }
+}
 
 @media print {
   /*
