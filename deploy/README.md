@@ -148,13 +148,32 @@ looks for npm and falls back to sourcing nvm, failing loudly rather than
 quietly doing nothing. A failed run is recorded in the journal and nowhere
 else — check there first.
 
-## Push notifications
+## Push and email notifications
 
-A second systemd timer checks every 2 minutes for maintenance requests
-nobody's been alerted to, and pushes a browser notification to that org's
-admin/property managers (whoever has turned notifications on in the app).
-Needs the VAPID keypair in `deploy/selfhost/.env` — `generate-secrets.sh`
-creates it; see that file's header.
+A second systemd timer runs `deploy/selfhost/notify.sh` every 2 minutes,
+which sends two things:
+
+- **Browser push** for new maintenance requests, to the org's admins and
+  property managers who turned notifications on in the app. Needs the VAPID
+  keypair in `deploy/selfhost/.env` — `generate-secrets.sh` creates it.
+- **Email** for every in-app notification, through the same Brevo SMTP
+  account sign-up emails use (the `SMTP_*` values in
+  `deploy/selfhost/.env` — nothing extra to configure). A new repair goes
+  to the admins/property managers *and* every technician who services that
+  property; a job offer goes to that technician; repair updates go to the
+  tenant who reported it. Each is emailed once; a failed send is retried
+  on the next run, up to five times.
+
+Check email works before relying on it:
+
+```bash
+cd ~/PropertyManagement/deploy/selfhost
+node send-email-notifications.mjs --test you@example.com
+```
+
+If that fails, Brevo is usually rejecting the sender: `SMTP_ADMIN_EMAIL`
+must be a verified sender in Brevo (Settings → Senders, Domains &
+Dedicated IPs).
 
 ```bash
 sudo cp deploy/property-management-notify.service /etc/systemd/system/
