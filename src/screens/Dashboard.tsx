@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, errorMessage } from '../lib/supabase'
 import { fetchMyMemberships, fetchOrganizationName, type Membership } from '../lib/org'
-import { navigate, APP_SECTIONS, type Route } from '../lib/route'
+import { navigate, APP_SECTIONS, TECH_SECTIONS, type Route } from '../lib/route'
 import { greeting, todayLong } from '../lib/dashboard'
 import { NotificationBell } from './NotificationBell'
 import { SettingsMenu } from './SettingsMenu'
@@ -142,17 +142,18 @@ export function Dashboard({ section, propertyId }: Props) {
           />
         )}
         {membership.role === 'technician' && (
-          <TechnicianDashboard memberId={membership.id} />
+          <TechnicianDashboard memberId={membership.id}
+            section={section} propertyId={propertyId} />
         )}
         {membership.role === 'tenant' && <TenantDashboard memberId={membership.id} />}
       </main>
 
-      {/* Only the roles that have more than one section. A tenant and a
-          technician each have a single screen, and a nav bar with one tab
-          is furniture. */}
-      {(membership.role === 'admin' || membership.role === 'property_manager') && (
+      {/* Only the roles that have more than one section. A tenant has a
+          single screen, and a nav bar with one tab is furniture. A
+          technician has two: their jobs, and the properties they service. */}
+      {membership.role !== 'tenant' && (
         <nav className="app-nav" aria-label="Sections">
-          {APP_SECTIONS.map((s) => (
+          {(membership.role === 'technician' ? TECH_SECTIONS : APP_SECTIONS).map((s) => (
             <button
               key={s.route}
               className={section === s.route ? 'app-nav-item is-current' : 'app-nav-item'}

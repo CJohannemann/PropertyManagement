@@ -15,7 +15,7 @@ import { parsePath, hrefFor, type Location, type Route } from './routePaths'
  * in deploy/nginx-property-management.conf), so these are real refreshable
  * URLs rather than a pushState illusion that 404s on reload.
  */
-export { APP_SECTIONS, SIGNED_IN_ONLY } from './routePaths'
+export { APP_SECTIONS, TECH_SECTIONS, SIGNED_IN_ONLY } from './routePaths'
 export type { Route, Location } from './routePaths'
 
 /**

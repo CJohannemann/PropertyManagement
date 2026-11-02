@@ -1,6 +1,9 @@
-import { errorMessage } from '../lib/supabase'
+import { errorMessage, supabase } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import { fetchOrgMembers, setMemberStatus, type Membership } from '../lib/org'
+import {
+  fetchTechnicianAccess, setTechnicianAccess, type TechnicianAccess,
+} from '../lib/equipment'
 import { useThemePreference, THEME_CHOICES } from '../lib/theme'
 import { LeaseTemplates } from './LeaseTemplates'
 import { InviteMember } from './InviteMember'
@@ -33,6 +36,7 @@ export function Settings({ organizationId, canInviteMembers, onBack }: Props) {
   const [members, setMembers] = useState<Membership[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [theme, setTheme] = useThemePreference()
+  const [properties, setProperties] = useState<PropertyOption[]>([])
 
   function loadMembers() {
     fetchOrgMembers(organizationId)
@@ -41,6 +45,13 @@ export function Settings({ organizationId, canInviteMembers, onBack }: Props) {
   }
 
   useEffect(loadMembers, [organizationId])
+
+  // For choosing which properties each technician services.
+  useEffect(() => {
+    supabase?.from('properties').select('id, name')
+      .eq('organization_id', organizationId).order('name')
+      .then(({ data }) => setProperties((data ?? []) as PropertyOption[]))
+  }, [organizationId])
 
   if (showTemplates) {
     return (
@@ -97,7 +108,8 @@ export function Settings({ organizationId, canInviteMembers, onBack }: Props) {
       {staff.length > 0 && (
         <div className="card-list">
           {staff.map((m) => (
-            <MemberRow key={m.id} member={m} onChanged={loadMembers} />
+            <MemberRow key={m.id} member={m} onChanged={loadMembers}
+              properties={properties} />
           ))}
         </div>
       )}
@@ -161,8 +173,8 @@ export function Settings({ organizationId, canInviteMembers, onBack }: Props) {
  * locks a real person out of their own lease.
  */
 function MemberRow({
-  member, onChanged,
-}: { member: Membership; onChanged: () => void }) {
+  member, onChanged, properties,
+}: { member: Membership; onChanged: () => void; properties?: PropertyOption[] }) {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -198,6 +210,10 @@ function MemberRow({
       )}
       {disabled && <div className="muted">Access removed — cannot sign in.</div>}
 
+      {member.role === 'technician' && properties && (
+        <TechnicianAccessEditor memberId={member.id} properties={properties} />
+      )}
+
       {error && <p className="error-text">{error}</p>}
 
       {disabled ? (
@@ -218,5 +234,100 @@ function MemberRow({
         </button>
       )}
     </div>
+  )
+}
+
+type PropertyOption = { id: string; name: string }
+
+/**
+ * Which properties a technician services. That decides what they see in
+ * the app — the properties, their units and equipment — and which jobs
+ * they can be offered. A technician starts with none, so nothing is
+ * visible to them until somebody sets this.
+ */
+function TechnicianAccessEditor({
+  memberId, properties,
+}: { memberId: string; properties: PropertyOption[] }) {
+  const [access, setAccess] = useState<TechnicianAccess | null>(null)
+  const [draft, setDraft] = useState<TechnicianAccess | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchTechnicianAccess(memberId)
+      .then(setAccess)
+      .catch((e) => setError(errorMessage(e)))
+  }, [memberId])
+
+  async function save() {
+    if (!draft) return
+    setBusy(true)
+    setError(null)
+    try {
+      await setTechnicianAccess(memberId, draft)
+      setAccess(draft)
+      setDraft(null)
+    } catch (e) {
+      setError(errorMessage(e))
+    }
+    setBusy(false)
+  }
+
+  if (error && !access) return <p className="error-text">{error}</p>
+  if (!access) return null
+
+  const names = properties
+    .filter((p) => access.propertyIds.includes(p.id))
+    .map((p) => p.name)
+  const summary = access.all
+    ? 'All properties'
+    : names.length > 0
+      ? names.join(', ')
+      : 'No properties yet — they cannot see any'
+
+  if (!draft) {
+    return (
+      <div className="muted" style={{ margin: '0.25rem 0' }}>
+        Services: {summary}
+        {' · '}
+        <button className="link" onClick={() => setDraft(access)}>Change</button>
+      </div>
+    )
+  }
+
+  function toggle(id: string) {
+    setDraft((d) => d && {
+      ...d,
+      propertyIds: d.propertyIds.includes(id)
+        ? d.propertyIds.filter((x) => x !== id)
+        : [...d.propertyIds, id],
+    })
+  }
+
+  return (
+    <fieldset style={{ border: '1px solid var(--line)', borderRadius: 8,
+                       padding: '0.75rem', margin: '0.5rem 0' }}>
+      <legend className="muted">Properties they service</legend>
+      <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <input type="checkbox" checked={draft.all}
+          onChange={(e) => setDraft({ ...draft, all: e.target.checked })} />
+        All properties, including ones added later
+      </label>
+      {!draft.all && properties.map((p) => (
+        <label key={p.id}
+          style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.4rem' }}>
+          <input type="checkbox" checked={draft.propertyIds.includes(p.id)}
+            onChange={() => toggle(p.id)} />
+          {p.name}
+        </label>
+      ))}
+      {error && <p className="error-text">{error}</p>}
+      <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem' }}>
+        <button className="link" disabled={busy} onClick={save}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button className="link" onClick={() => { setDraft(null); setError(null) }}>Cancel</button>
+      </div>
+    </fieldset>
   )
 }

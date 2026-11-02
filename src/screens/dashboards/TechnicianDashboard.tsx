@@ -2,10 +2,23 @@ import { errorMessage } from '../../lib/supabase'
 import { useEffect, useState } from 'react'
 import { fetchJobs, type Job } from '../../lib/maintenance'
 import { JobDetail } from '../JobDetail'
+import { TechnicianProperties } from '../TechnicianProperties'
+import type { Route } from '../../lib/route'
 
-type Props = { memberId: string }
+type Props = {
+  memberId: string
+  section: Route
+  propertyId?: string
+}
 
-export function TechnicianDashboard({ memberId }: Props) {
+export function TechnicianDashboard({ memberId, section, propertyId }: Props) {
+  if (section === '/properties') {
+    return <TechnicianProperties memberId={memberId} propertyId={propertyId} />
+  }
+  return <TechnicianJobs memberId={memberId} />
+}
+
+function TechnicianJobs({ memberId }: { memberId: string }) {
   const [jobs, setJobs] = useState<Job[] | null>(null)
   const [selected, setSelected] = useState<Job | null>(null)
   const [error, setError] = useState<string | null>(null)

@@ -37,6 +37,15 @@ export const APP_SECTIONS: { route: Route; label: string }[] = [
   { route: '/properties', label: 'Properties' },
 ]
 
+/**
+ * A technician's sections: the work they've been given, and the properties
+ * they service — where the equipment inventory lives.
+ */
+export const TECH_SECTIONS: { route: Route; label: string }[] = [
+  { route: '/dashboard', label: 'Jobs' },
+  { route: '/properties', label: 'Properties' },
+]
+
 /** Screens that mean nothing signed out, and bounce to the sign-in page. */
 export const SIGNED_IN_ONLY: string[] = [
   '/', '/dashboard', '/rent', '/maintenance', '/properties', '/settings',

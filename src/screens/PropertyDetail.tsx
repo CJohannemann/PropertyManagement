@@ -8,6 +8,7 @@ import { LeaseForm } from './LeaseForm'
 import { InviteTenant } from './InviteTenant'
 import { LeaseDocument } from './LeaseDocument'
 import { fetchSigningStatus, type SigningStatus } from '../lib/signatures'
+import { EquipmentList } from './EquipmentList'
 
 export type PropertySummary = {
   id: string
@@ -27,6 +28,8 @@ type Props = {
    */
   canManageUnits: boolean
   organizationName: string
+  /** The viewer's org_members id — recorded on equipment they add. */
+  memberId: string
   onBack: () => void
   /** Reloads the caller's property list after an edit, so the header here
    *  and the row it was opened from don't disagree. */
@@ -34,7 +37,7 @@ type Props = {
 }
 
 export function PropertyDetail({
-  property, canManageUnits, organizationName, onBack, onPropertyChanged,
+  property, canManageUnits, organizationName, memberId, onBack, onPropertyChanged,
 }: Props) {
   const [units, setUnits] = useState<Unit[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -107,23 +110,32 @@ export function PropertyDetail({
           <UnitRow key={u.id} unit={u} property={property}
             canManageUnits={canManageUnits}
             onUnitChanged={load}
+            memberId={memberId}
             organizationName={organizationName} />
         ))}
       </div>
+
+      {/* A shared boiler or the laundry-room washer belongs to no one
+          unit. Each unit's own equipment is under that unit above. */}
+      <h3 style={{ marginTop: '2rem' }}>Shared building equipment</h3>
+      <EquipmentList propertyId={property.id} unitId={null}
+        memberId={memberId} canDelete />
     </div>
   )
 }
 
 function UnitRow({
-  unit, property, organizationName, canManageUnits, onUnitChanged,
+  unit, property, organizationName, canManageUnits, onUnitChanged, memberId,
 }: {
   unit: Unit
   property: PropertySummary
   organizationName: string
   canManageUnits: boolean
   onUnitChanged: () => void
+  memberId: string
 }) {
   const [editing, setEditing] = useState(false)
+  const [showEquipment, setShowEquipment] = useState(false)
   const [leases, setLeases] = useState<Lease[] | null>(null)
   const [tenants, setTenants] = useState<Record<string, LeaseTenant[]>>({})
   const [creatingLease, setCreatingLease] = useState(false)
@@ -311,6 +323,20 @@ function UnitRow({
           )}
         </div>
       )}
+
+      {/* Collapsed by default: the lease is what most visits to this
+          screen are about, and a 9-unit property with every appliance
+          listed would bury it. */}
+      <div style={{ marginTop: '0.75rem', borderTop: '1px solid var(--line)', paddingTop: '0.5rem' }}>
+        <button className="link" aria-expanded={showEquipment}
+          onClick={() => setShowEquipment((v) => !v)}>
+          {showEquipment ? '▾ Hide equipment' : '▸ Equipment & appliances'}
+        </button>
+        {showEquipment && (
+          <EquipmentList propertyId={property.id} unitId={unit.id}
+            memberId={memberId} canDelete />
+        )}
+      </div>
     </div>
   )
 }

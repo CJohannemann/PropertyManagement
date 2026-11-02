@@ -73,6 +73,7 @@ export function PropertyManagerDashboard({
         // docs/domain-model.md; leases and tenant invites are not.
         canManageUnits={false}
         organizationName={organizationName}
+        memberId={memberId}
         onBack={() => { navigate('/properties'); load() }}
         onPropertyChanged={load}
       />

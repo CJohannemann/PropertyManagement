@@ -6,6 +6,7 @@ import {
   type Job, type JobEntry, type JobTotals,
 } from '../lib/maintenance'
 import { money } from '../lib/charges'
+import { EquipmentList } from './EquipmentList'
 
 type Props = {
   job: Job
@@ -75,6 +76,15 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
           }}>Mark complete</button>
         </div>
       )}
+
+      {/* What is installed where the work is, so the make and model are
+          in front of whoever is about to look up a part. Deleting is left
+          to the property screen; here it is look-up and record. */}
+      <h3 style={{ marginTop: '1.5rem' }}>
+        {job.unit_id ? 'Equipment in this unit' : 'Equipment at this property'}
+      </h3>
+      <EquipmentList propertyId={job.property_id} unitId={job.unit_id}
+        memberId={memberId} canDelete={false} readOnly={!canEdit} />
 
       {totals && (
         <div className="card-list">
