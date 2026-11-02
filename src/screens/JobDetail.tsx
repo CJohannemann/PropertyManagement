@@ -239,10 +239,10 @@ function ReceiptUpload({
       <input
         id="receipt"
         type="file"
-        // `capture` opens the camera directly on a phone rather than the
-        // file browser — this is used standing in someone's kitchen.
+        // No `capture`, which limited a phone to the camera: a receipt
+        // photographed earlier, or emailed as a PDF, has to be pickable
+        // too. The phone still offers Take Photo first.
         accept="image/*,application/pdf"
-        capture="environment"
         disabled={busy}
         onChange={async (e) => {
           const file = e.target.files?.[0]

@@ -73,14 +73,15 @@ export function RequestRepair({ unitId, memberId, onDone }: Props) {
           <input
             id="r-photo"
             type="file"
-            // `capture` opens the camera directly on a phone rather than
-            // the file browser — most reports get filed standing in front
-            // of the problem.
+            // No `capture`: it limited a phone to the camera, so a photo
+            // already in the gallery — taken when the problem started, or
+            // sent by someone else — couldn't be attached. Without it the
+            // phone offers Take Photo *and* Photo Library.
             accept="image/*"
-            capture="environment"
+            multiple
             onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) setPhotos((prev) => [...prev, file])
+              const files = Array.from(e.target.files ?? [])
+              if (files.length) setPhotos((prev) => [...prev, ...files])
               e.target.value = ''
             }}
           />
