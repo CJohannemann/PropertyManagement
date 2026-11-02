@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase, describeError } from '../lib/supabase'
 import { navigate } from '../lib/route'
+import { ConfirmCode } from './ConfirmCode'
 import {
   getUrlInviteToken, peekPendingInviteToken, inviteUrlFor,
 } from '../lib/inviteLink'
@@ -69,6 +70,13 @@ export function SignUp() {
               ? ', or ask whoever invited you to send a fresh link'
               : ''}.
           </p>
+          {/* The email has a link and a 6-digit code. The code is for when
+              the link can't be used: opened on another device, or already
+              spent by a work email system that scans links. */}
+          <p className="muted" style={{ marginBottom: 0 }}>
+            Or type the 6-digit code from the email here:
+          </p>
+          <ConfirmCode initialEmail={email} />
         </div>
       </div>
     )

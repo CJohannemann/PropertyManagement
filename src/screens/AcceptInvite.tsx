@@ -7,6 +7,8 @@ import {
   getUrlInviteToken, peekPendingInviteToken, storePendingInviteToken,
   clearPendingInviteToken,
 } from '../lib/inviteLink'
+import { authLinkError, describeLinkError } from '../lib/authLinks'
+import { ConfirmCode } from './ConfirmCode'
 
 /**
  * Landing screen for an invite link (?token=...). If the visitor is
@@ -19,6 +21,11 @@ export function AcceptInvite() {
   const { session, checking } = useSession()
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  // Arriving from a confirmation email whose link no longer works. Before
+  // this was read, that visitor was offered "Create account" for the
+  // account they had just created.
+  const linkError = authLinkError()
+  const [enteringCode, setEnteringCode] = useState(linkError !== null)
   // The URL first, then whatever was stashed on the way through sign-up.
   // The fallback matters when the confirmation email is opened somewhere
   // that strips the query string, and when someone reaches this screen a
@@ -67,7 +74,21 @@ export function AcceptInvite() {
             )}
           </>
         )}
-        {!error && !session && (
+        {!error && !session && enteringCode && (
+          <>
+            <p className={linkError ? 'error-text' : 'muted'}>
+              {linkError
+                ? describeLinkError(linkError)
+                : 'Enter the email you signed up with and the 6-digit code from your confirmation email.'}
+            </p>
+            <ConfirmCode />
+            <p className="muted" style={{ marginTop: '1rem' }}>
+              Haven't created an account yet?{' '}
+              <button className="link" onClick={() => navigate('/signup')}>Create one</button>
+            </p>
+          </>
+        )}
+        {!error && !session && !enteringCode && (
           <>
             <p className="muted" style={{ marginBottom: '1rem' }}>
               Create an account or sign in to accept this invite.
@@ -79,6 +100,12 @@ export function AcceptInvite() {
               Already have an account?{' '}
               <button className="link" onClick={() => navigate('/login')}>
                 Sign in
+              </button>
+            </p>
+            <p className="muted" style={{ marginTop: '0.25rem' }}>
+              Created one but haven't confirmed it?{' '}
+              <button className="link" onClick={() => setEnteringCode(true)}>
+                Enter your code
               </button>
             </p>
           </>
