@@ -155,12 +155,12 @@ select assert(
   'a technician cannot see photos for work nobody has given them');
 reset role;
 
--- Now it becomes a job, offered to one technician and accepted.
+-- Now it becomes a job, assigned to one technician.
 select set_config('request.jwt.uid', 'a0000000-0000-0000-0000-000000000001', false);
 select create_job_from_request(:'req', :'tech', current_date) as job \gset
 set role authenticated;
 select set_config('request.jwt.uid', 'a0000000-0000-0000-0000-000000000003', false);
-select respond_to_job(:'job', true);
+-- Assigned directly (034): the job is the technician's with no accept step.
 
 select assert(
   (select count(*) from storage.objects where bucket_id = 'request-photos') = 1,

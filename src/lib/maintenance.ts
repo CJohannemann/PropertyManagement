@@ -18,9 +18,10 @@ export type Job = {
   request_id: string | null
   assigned_technician_id: string | null
   /**
-   * 'offered' is a job given to a named technician who has not answered
-   * yet; 'declined' is one they turned down, back in the queue with nobody
-   * on it. Both added in 027 — see that migration for why assigning work
+   * 'offered' and 'declined' are history only: 027 made assigning a job
+   * an offer the technician had to accept, and 034 took that step out —
+   * an assigned job is 'scheduled' and theirs. Old declined jobs keep
+   * their status. Both added in 027 — see that migration for why assigning work
    * is a question rather than an instruction.
    */
   status: 'offered' | 'scheduled' | 'in_progress' | 'completed' | 'canceled' | 'declined'
@@ -108,23 +109,6 @@ export async function setJobStatus(jobId: string, status: Job['status']): Promis
   // later without reconstructing it from entry timestamps.
   if (status === 'completed') patch.completed_date = new Date().toISOString().slice(0, 10)
   const { error } = await supabase.from('maintenance_jobs').update(patch).eq('id', jobId)
-  if (error) throw error
-}
-
-/**
- * Wraps respond_to_job(). Accepting keeps the job and books it in;
- * declining hands it back unassigned, with the reason appended to the
- * job's notes so whoever reassigns it knows why.
- */
-export async function respondToJob(
-  jobId: string, accept: boolean, reason?: string,
-): Promise<void> {
-  if (!supabase) throw new Error('Supabase not configured')
-  const { error } = await supabase.rpc('respond_to_job', {
-    target_job: jobId,
-    accept,
-    reason: reason?.trim() || null,
-  })
   if (error) throw error
 }
 

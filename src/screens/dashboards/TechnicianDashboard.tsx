@@ -49,30 +49,17 @@ function TechnicianJobs({ memberId }: { memberId: string }) {
     )
   }
 
-  // Offers first and separately: they are the only rows that need an
-  // answer, and burying them in a list of work already accepted is how an
-  // offer sits unanswered for three days.
-  const offered = jobs?.filter((j) => j.status === 'offered') ?? []
+  // Assigned jobs are simply theirs (034) — there is no offer to answer,
+  // so everything assigned and not finished is one list. 'offered' is
+  // included only for a job caught mid-change before 034 ran.
   const open = jobs?.filter(
-    (j) => j.status === 'scheduled' || j.status === 'in_progress') ?? []
+    (j) => j.status === 'scheduled' || j.status === 'in_progress'
+      || j.status === 'offered') ?? []
   const done = jobs?.filter((j) => j.status === 'completed') ?? []
 
   return (
     <div>
-      {offered.length > 0 && (
-        <>
-          <h2>Waiting for your answer</h2>
-          <div className="card-list">
-            {offered.map((j) => (
-              <JobRow key={j.id} job={j} onOpen={() => setSelected(j)} />
-            ))}
-          </div>
-        </>
-      )}
-
-      <h2 style={{ marginTop: offered.length > 0 ? '2rem' : undefined }}>
-        Your jobs
-      </h2>
+      <h2>Your jobs</h2>
       {error && <p className="error-text">{error}</p>}
       {jobs === null && !error && <p className="muted">Loading…</p>}
       {jobs?.length === 0 && (
@@ -89,8 +76,8 @@ function TechnicianJobs({ memberId }: { memberId: string }) {
       )}
       {/* Only when there is something above to explain the emptiness —
           otherwise the general empty state further up already covers it. */}
-      {open.length === 0 && offered.length > 0 && (
-        <p className="empty-state">Nothing accepted yet.</p>
+      {open.length === 0 && done.length > 0 && (
+        <p className="empty-state">Nothing open right now.</p>
       )}
 
       {done.length > 0 && (

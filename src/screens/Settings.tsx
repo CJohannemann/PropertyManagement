@@ -242,7 +242,7 @@ type PropertyOption = { id: string; name: string }
 /**
  * Which properties a technician services. That decides what they see in
  * the app — the properties, their units and equipment — and which jobs
- * they can be offered. A technician starts with none, so nothing is
+ * they can be assigned. A technician starts with none, so nothing is
  * visible to them until somebody sets this.
  */
 function TechnicianAccessEditor({

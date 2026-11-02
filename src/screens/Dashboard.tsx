@@ -104,7 +104,7 @@ export function Dashboard({ section, propertyId }: Props) {
               notification was raised with org_member_id null, so those
               were the only rows anyone could read. Migration 027 raises
               notifications addressed to a single member — a tenant told
-              their repair is booked in, a technician offered a job — and
+              their repair is booked in, a technician assigned a job — and
               hiding the bell from them would mean writing those rows and
               then never showing them. The RLS policy in 023 already
               scopes it: an unaddressed notification stays management-only. */}
