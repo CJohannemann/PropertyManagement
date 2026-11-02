@@ -2,6 +2,7 @@ import { errorMessage } from '../lib/supabase'
 import { useState } from 'react'
 import { createInvite } from '../lib/org'
 import { inviteUrlFor } from '../lib/inviteLink'
+import { CopyLink } from './CopyLink'
 
 type Props = { leaseId: string; onDone: () => void }
 
@@ -37,8 +38,7 @@ export function InviteTenant({ leaseId, onDone }: Props) {
             Send this link to {email}. It expires in 7 days and can only be
             used once.
           </p>
-          <input readOnly value={link} onClick={(e) => e.currentTarget.select()}
-            style={{ width: '100%', padding: '0.5rem' }} />
+          <CopyLink url={link} shareTitle="Your lease invite" />
           <button className="primary" style={{ marginTop: '0.75rem' }} onClick={onDone}>
             Done
           </button>
