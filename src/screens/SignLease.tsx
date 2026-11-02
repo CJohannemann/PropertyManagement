@@ -1,4 +1,4 @@
-import { errorMessage } from '../lib/supabase'
+import { errorMessage, supabase } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import {
   fetchSignatures, signLease, type LeaseSignature,
@@ -9,6 +9,8 @@ type Props = {
   /** The document as rendered on screen, stored as what the signer read. */
   renderedText: string
   onSigned: () => void
+  /** Leaves the lease screen — offered once the viewer has signed. */
+  onDone?: () => void
 }
 
 /**
@@ -22,13 +24,28 @@ type Props = {
  * and agreeing to the lease are different agreements, and bundling them
  * into one tick makes both weaker.
  */
-export function SignLease({ leaseId, renderedText, onSigned }: Props) {
+export function SignLease({ leaseId, renderedText, onSigned, onDone }: Props) {
   const [signatures, setSignatures] = useState<LeaseSignature[] | null>(null)
   const [consent, setConsent] = useState(false)
   const [agree, setAgree] = useState(false)
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // The viewer's own membership ids, to tell "I have signed" from "someone
+  // has signed". Several tenants can be on one lease, and a landlord's
+  // signature is not the tenant's.
+  const [myIds, setMyIds] = useState<string[] | null>(null)
+  const [justSigned, setJustSigned] = useState(false)
+
+  useEffect(() => {
+    if (!supabase) return
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user || !supabase) return setMyIds([])
+      const { data: rows } = await supabase
+        .from('org_members').select('id').eq('user_id', data.user.id)
+      setMyIds((rows ?? []).map((r: { id: string }) => r.id))
+    })
+  }, [])
 
   async function load() {
     try {
@@ -45,6 +62,7 @@ export function SignLease({ leaseId, renderedText, onSigned }: Props) {
     try {
       await signLease(leaseId, name, consent, renderedText)
       await load()
+      setJustSigned(true)
       onSigned()
     } catch (err) {
       setError(errorMessage(err))
@@ -56,6 +74,7 @@ export function SignLease({ leaseId, renderedText, onSigned }: Props) {
 
   const tenant = signatures.find((s) => s.signer_role === 'tenant')
   const landlord = signatures.find((s) => s.signer_role === 'landlord')
+  const mine = signatures.find((s) => myIds?.includes(s.org_member_id))
 
   return (
     <div className="card-list">
@@ -75,12 +94,38 @@ export function SignLease({ leaseId, renderedText, onSigned }: Props) {
           </div>
         </div>
 
+        {/* Once you've signed, the form is replaced by a confirmation.
+            It used to stay on screen, filled in, after a successful
+            signature — the only change was the status line at the top of
+            this card, out of view — so signing looked like it had done
+            nothing, and the second tap was the first anyone heard of it
+            (as an "already signed" error). */}
+        {mine ? (
+          <div role="status" style={{
+            border: '1px solid var(--accent)', borderRadius: 8, padding: '0.9rem',
+          }}>
+            <strong>✓ {justSigned ? 'Signed.' : 'You\u2019ve signed this lease.'}</strong>
+            <div className="muted" style={{ marginTop: '0.25rem' }}>
+              Signed by {mine.signed_name} on {mine.signed_at.slice(0, 10)}.{' '}
+              {mine.signer_role === 'tenant'
+                ? (landlord
+                    ? 'Your landlord has signed too — the lease is in effect. Use Print / Save as PDF at the top to keep a copy.'
+                    : 'Your landlord will countersign next. You don\u2019t need to do anything else.')
+                : (tenant
+                    ? 'Both sides have signed — the lease is in effect.'
+                    : 'Waiting for the tenant to sign.')}
+            </div>
+            {onDone && (
+              <button className="primary" style={{ marginTop: '0.75rem' }} onClick={onDone}>
+                Done
+              </button>
+            )}
+          </div>
+        ) : myIds === null ? null : (
+          <>
         {error && <p className="error-text">{error}</p>}
 
-        {/* The RPC refuses a second signature from the same person, but
-            showing the form to someone who has already signed invites an
-            error rather than preventing one. */}
-        {signatures.length > 0 && error?.includes('already signed') ? null : (
+        {(
           <form onSubmit={submit}>
             <div className="field">
               <label>
@@ -121,6 +166,8 @@ export function SignLease({ leaseId, renderedText, onSigned }: Props) {
               lease do not change what you signed.
             </p>
           </form>
+        )}
+          </>
         )}
       </div>
     </div>

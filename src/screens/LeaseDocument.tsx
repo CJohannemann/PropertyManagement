@@ -341,6 +341,7 @@ export function LeaseDocument({
               .map((c) => [c.heading, fill(c.body)].join('\n'))
               .join('\n\n')}
             onSigned={() => onSigned?.()}
+            onDone={onClose}
           />
         </div>
       )}
