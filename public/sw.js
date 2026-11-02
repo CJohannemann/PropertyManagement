@@ -6,6 +6,13 @@
 // The payload comes from deploy/selfhost/send-push-notifications.mjs:
 // { title, body, link, tag, urgent }.
 
+// Take over straight away instead of waiting for every open tab to close.
+// Push can only subscribe through an active worker, and a worker left
+// "waiting" behind an older one made "Turn on alerts" fail on a phone that
+// had the app open.
+self.addEventListener('install', () => self.skipWaiting())
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
+
 self.addEventListener('push', (event) => {
   let data = {}
   try {

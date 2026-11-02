@@ -4,6 +4,7 @@ import './index.css'
 import './App.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './screens/ErrorBoundary.tsx'
+import { pushSupported, registerServiceWorker } from './lib/push'
 
 /**
  * Stops the scroll wheel from changing a focused number field. Hiding the
@@ -24,6 +25,12 @@ document.addEventListener(
   },
   { passive: true },
 )
+
+// Registered up front, not on the first tap of "Turn on alerts": push can
+// only subscribe through an active worker, and installing one takes a
+// moment. Failure is harmless here — enabling alerts registers it again
+// and reports the error then.
+if (pushSupported) registerServiceWorker().catch(() => {})
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

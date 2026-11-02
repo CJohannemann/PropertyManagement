@@ -40,6 +40,23 @@ export function needsHomeScreenForPush(): boolean {
 }
 
 /**
+ * Registers public/sw.js. Called once at startup (main.tsx) so the worker
+ * is usually already active by the time someone taps "Turn on alerts",
+ * and again from enablePushNotifications() in case that hasn't finished.
+ * Registering an already-registered worker is a no-op.
+ */
+export function registerServiceWorker(): Promise<ServiceWorkerRegistration> {
+  return navigator.serviceWorker.register('/sw.js')
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
+  ])
+}
+
+/**
  * Asks the browser for notification permission, subscribes to Web Push,
  * and stores the subscription so
  * deploy/selfhost/send-push-notifications.mjs can find it. Must be
@@ -55,7 +72,16 @@ export async function enablePushNotifications(memberId: string): Promise<void> {
     throw new Error('Notification permission was not granted')
   }
 
-  const registration = await navigator.serviceWorker.register('/sw.js')
+  // subscribe() needs an *active* service worker. register() resolves as
+  // soon as the worker is installing, and subscribing then fails with
+  // "Subscribing for push requires an active service worker" — every time
+  // on an iPhone, where the first install is slow enough to always lose
+  // that race. `ready` resolves only once a worker is active.
+  await registerServiceWorker()
+  const registration = await withTimeout(
+    navigator.serviceWorker.ready, 15000,
+    'The notification service took too long to start — close the app and try again.',
+  )
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
