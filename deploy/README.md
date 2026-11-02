@@ -99,17 +99,47 @@ sudo systemctl disable --now property-management-deploy.timer
 With nothing new to deploy it exits silently, so an empty log is the
 correct result, not a failure.
 
-### It does not apply database migrations
+### It applies database migrations too
 
-Deliberately. Rebuilding a frontend unattended is safe; changing a live
-schema holding tenant and payment data is not — an unattended migration
-that goes wrong at 3am gets discovered by a tenant, not by you. When a
-pulled commit adds files under `db/migrations/`, the deploy log says so
-loudly and leaves them:
+When a pulled commit changes `db/migrations/`, `deploy.sh` applies them
+before rebuilding the frontend, with three guards because this runs
+unattended against real tenant and payment data:
+
+1. **A backup first** — `deploy/selfhost/backup-db.sh` dumps the database
+   to `~/property-management-backups/` (outside the repo; the newest 20
+   are kept).
+2. **One transaction per migration file** — a file that fails partway
+   leaves none of its changes behind.
+3. **The frontend waits** — the new build only goes live once migrations
+   succeed, so a new screen never runs against a database missing its
+   tables.
+
+If a migration fails, the deploy stops with a `DEPLOY STOPPED` message in
+the journal, the site keeps serving the previous build, and auto-deploy
+leaves that commit alone rather than retrying it every two minutes.
+Pushing a fix is the normal way out. To retry the same commit after
+fixing the database by hand:
 
 ```bash
-cd ~/PropertyManagement && bash deploy/selfhost/apply-migrations.sh
+cd ~/PropertyManagement && rm .deploy-state/blocked && bash deploy/deploy.sh
 ```
+
+To restore a backup:
+
+```bash
+cd ~/PropertyManagement/deploy/selfhost
+docker compose exec -T db pg_restore -U postgres -d postgres --clean --if-exists \
+  < ~/property-management-backups/pm-<timestamp>.dump
+```
+
+`SKIP_MIGRATIONS=1 bash deploy/deploy.sh` deploys the frontend alone.
+`.deploy-state/` records what was last migrated and deployed on this
+server; deleting it makes the next deploy re-apply every migration, which
+is safe — each one is written to be re-run.
+
+The deploy service runs as `ubuntu`, which must be able to run `docker`
+without sudo (it is in the `docker` group if `apply-migrations.sh` already
+works for you by hand).
 
 ### If deploys stop happening
 

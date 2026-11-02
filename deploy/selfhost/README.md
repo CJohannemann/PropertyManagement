@@ -44,8 +44,9 @@ docker compose restart rest        # or auth, or db
 
 ### Applying a new migration
 
-Auto-deploy rebuilds the frontend but deliberately never touches the
-database, so a commit that adds a `db/migrations/` file needs this by hand:
+Auto-deploy applies new migrations itself (after backing up the
+database — see "It applies database migrations too" in deploy/README.md).
+To run them by hand instead:
 
 ```bash
 cd ~/PropertyManagement

@@ -20,9 +20,16 @@ if [ ${#files[@]} -eq 0 ]; then
   exit 0
 fi
 
+# Each file in one transaction (-1). Without it, a migration that fails on
+# its fifth statement leaves the first four applied — a half-changed schema
+# that matches neither the old app nor the new one. With it, a failure
+# leaves that file's changes entirely unapplied. -1 only takes effect with
+# -f, hence `-f -` to read the piped file. db/test/run.mjs applies them the
+# same way, so a migration that cannot run inside a transaction fails in CI
+# rather than here.
 for f in "${files[@]}"; do
   echo "=== migration: $(basename "$f") ==="
-  docker compose exec -T db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$f"
+  docker compose exec -T db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -1 -f - < "$f"
 done
 
 # PostgREST caches the database schema at startup and does not notice a new

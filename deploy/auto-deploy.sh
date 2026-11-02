@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
 #
-# Checks GitHub for new commits and, if there are any, rebuilds the
-# frontend. Run on a timer by property-management-deploy.timer — see
-# deploy/README.md for the install steps.
+# Checks GitHub for new commits and, if there are any, deploys them —
+# database migrations included. Run on a timer by
+# property-management-deploy.timer — see deploy/README.md for the install
+# steps, and deploy.sh for how migrations are made safe to run unattended
+# (a backup first, one transaction per file, and the frontend held back
+# until they succeed).
 #
 # Exits silently when there's nothing new, so the journal only carries
 # entries for runs that actually did something.
-#
-# Deliberately does NOT apply database migrations. A frontend rebuild is
-# safe to do unattended; schema changes against a live database with real
-# tenant and payment data are not — an unattended migration that goes
-# wrong at 3am is discovered by a tenant, not by you. New migration files
-# are reported loudly instead, to be applied by hand with
-# deploy/selfhost/apply-migrations.sh.
 
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -50,28 +46,27 @@ else
   echo "WARNING: flock not found; running without an overlap guard." >&2
 fi
 
-before="$(git rev-parse HEAD)"
+STATE="$REPO/.deploy-state"
 git fetch --quiet origin master
 after="$(git rev-parse origin/master)"
 
-if [ "$before" = "$after" ]; then
+# Compared against the last deploy that *finished*, not against HEAD: a
+# deploy that pulled and then failed (a migration, npm ci, the build) has
+# HEAD already at the new commit, and comparing against HEAD would call
+# that "nothing new" and never try again. No record at all — the first run
+# after this was introduced — deploys, which is also what applies any
+# migration pulled back when they were left to be run by hand.
+last="$(cat "$STATE/last-deployed" 2>/dev/null || true)"
+if [ "$last" = "$after" ]; then
   exit 0
 fi
 
-echo "New commits ${before:0:7} -> ${after:0:7}, deploying."
-
-# Checked before the pull, while `before` is still what's on disk.
-new_migrations="$(git diff --name-only "$before" "$after" -- db/migrations/ || true)"
-
-bash deploy/deploy.sh
-
-if [ -n "$new_migrations" ]; then
-  echo
-  echo "============================================================"
-  echo "WARNING: new database migrations were pulled but NOT applied:"
-  echo "$new_migrations"
-  echo
-  echo "Apply them yourself when you're ready to watch it happen:"
-  echo "  cd $REPO && bash deploy/selfhost/apply-migrations.sh"
-  echo "============================================================"
+# A migration failed on exactly this commit; deploy.sh already said so,
+# loudly, once. Retrying every two minutes would take a fresh backup each
+# time and bury that message. A newer commit gets a fresh attempt.
+if [ "$(cat "$STATE/blocked" 2>/dev/null || true)" = "$after" ]; then
+  exit 0
 fi
+
+echo "New commits ${last:0:7} -> ${after:0:7}, deploying."
+bash deploy/deploy.sh

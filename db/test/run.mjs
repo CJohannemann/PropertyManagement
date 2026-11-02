@@ -36,10 +36,13 @@ function docker(args, opts = {}) {
   return execFileSync('docker', args, { encoding: 'utf8', ...opts })
 }
 
-function psql(sql, { quiet = true } = {}) {
+function psql(sql, { quiet = true, transaction = false } = {}) {
   const args = ['exec', '-i', CONTAINER, 'psql', '-U', 'postgres', '-d', 'postgres',
     '-v', 'ON_ERROR_STOP=1']
   if (quiet) args.push('-q')
+  // The way deploy/selfhost/apply-migrations.sh runs a migration: the
+  // whole file in one transaction (-1 only applies with -f, hence `-f -`).
+  if (transaction) args.push('-1', '-f', '-')
   // Silences the wall of "truncate cascades to table ..." notices between
   // files, which otherwise bury the one line that matters. Warnings and
   // errors still come through, and ON_ERROR_STOP still aborts.
@@ -122,7 +125,7 @@ function loadSchema() {
   for (const pass of [1, 2]) {
     for (const f of migrations) {
       try {
-        psql(readFileSync(join(DB, 'migrations', f), 'utf8'))
+        psql(readFileSync(join(DB, 'migrations', f), 'utf8'), { transaction: true })
       } catch (err) {
         throw new Error(
           `migration ${f} failed on pass ${pass} of 2`

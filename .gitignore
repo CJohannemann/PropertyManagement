@@ -3,6 +3,8 @@ dist/
 .env
 deploy/selfhost/.env
 deploy/selfhost/data/
+# What deploy.sh last migrated and deployed — per-server, not shared.
+.deploy-state/
 
 # Real documents — signed leases, receipts, statements — must never reach
 # the remote. This repo is on GitHub, and these carry tenant names,
