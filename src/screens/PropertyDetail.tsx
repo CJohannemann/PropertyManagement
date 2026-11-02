@@ -9,6 +9,8 @@ import { InviteTenant } from './InviteTenant'
 import { LeaseDocument } from './LeaseDocument'
 import { fetchSigningStatus, type SigningStatus } from '../lib/signatures'
 import { EquipmentList } from './EquipmentList'
+import { EndLeaseForm, LeaseRecord, DepositPanel } from './LeaseEnding'
+import { endReasonLabel } from '../lib/leaseEnd'
 
 export type PropertySummary = {
   id: string
@@ -136,6 +138,9 @@ function UnitRow({
 }) {
   const [editing, setEditing] = useState(false)
   const [showEquipment, setShowEquipment] = useState(false)
+  const [ending, setEnding] = useState(false)
+  const [showRecord, setShowRecord] = useState(false)
+  const [showPast, setShowPast] = useState(false)
   const [leases, setLeases] = useState<Lease[] | null>(null)
   const [tenants, setTenants] = useState<Record<string, LeaseTenant[]>>({})
   const [creatingLease, setCreatingLease] = useState(false)
@@ -168,6 +173,9 @@ function UnitRow({
   }, [unit.id])
 
   const activeLease = leases?.find((l) => l.status === 'active') ?? null
+  const pastLeases = leases?.filter((l) => l.status === 'ended') ?? []
+  const namesOf = (leaseId: string) =>
+    (tenants[leaseId] ?? []).map((t) => t.org_members?.full_name ?? 'Unnamed').join(', ')
   // Correctable right up until somebody signs it, and not after: a
   // signature is what turns typed-in terms into an agreement, and the
   // database stops bringing the charges along at the same moment. See
@@ -306,6 +314,30 @@ function UnitRow({
               onDone={() => { setInvitingFor(null); load() }}
             />
           )}
+
+          {/* The end of a tenancy, kept apart from the everyday links above
+              so "End lease" is never one stray tap away from "View". */}
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+            <button className="link" aria-expanded={showRecord}
+              onClick={() => setShowRecord((v) => !v)}>
+              {showRecord ? 'Hide lease record' : 'Lease record'}
+            </button>
+            {!ending && (
+              <button className="link" style={{ color: 'var(--danger)' }}
+                onClick={() => setEnding(true)}>
+                End lease…
+              </button>
+            )}
+          </div>
+          {showRecord && <LeaseRecord leaseId={activeLease.id} memberId={memberId} />}
+          {ending && (
+            <EndLeaseForm
+              leaseId={activeLease.id}
+              tenantNames={namesOf(activeLease.id)}
+              onDone={() => { setEnding(false); setShowRecord(false); setShowPast(true); load() }}
+              onCancel={() => setEnding(false)}
+            />
+          )}
         </div>
       ) : (
         <div style={{ marginTop: '0.5rem' }}>
@@ -324,6 +356,20 @@ function UnitRow({
         </div>
       )}
 
+      {/* Earlier tenancies: when and why they ended, what's still owed,
+          the record, and the deposit. Collapsed — most visits are about
+          whoever lives there now. */}
+      {pastLeases.length > 0 && (
+        <div style={{ marginTop: '0.75rem', borderTop: '1px solid var(--line)', paddingTop: '0.5rem' }}>
+          <button className="link" aria-expanded={showPast} onClick={() => setShowPast((v) => !v)}>
+            {showPast ? '▾ Hide past leases' : `▸ Past leases (${pastLeases.length})`}
+          </button>
+          {showPast && pastLeases.map((l) => (
+            <PastLease key={l.id} lease={l} names={namesOf(l.id)} memberId={memberId} />
+          ))}
+        </div>
+      )}
+
       {/* Collapsed by default: the lease is what most visits to this
           screen are about, and a 9-unit property with every appliance
           listed would bury it. */}
@@ -337,6 +383,34 @@ function UnitRow({
             memberId={memberId} canDelete />
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * One ended tenancy: who, when, why, and the two things that outlast it —
+ * the record and the deposit.
+ */
+function PastLease({ lease, names, memberId }: { lease: Lease; names: string; memberId: string }) {
+  const [open, setOpen] = useState<'record' | 'deposit' | null>(null)
+  return (
+    <div style={{ marginTop: '0.75rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+        <strong>{names || 'No tenant named'}</strong>
+        <span className="muted" style={{ margin: 0 }}>{endReasonLabel(lease.end_reason)}</span>
+      </div>
+      <div className="muted">
+        {lease.start_date} – {lease.ended_on ?? lease.end_date} · ${lease.rent_amount}/mo
+      </div>
+      {lease.end_note && <div className="muted">{lease.end_note}</div>}
+      <div style={{ display: 'flex', gap: '1rem', marginTop: '0.25rem' }}>
+        <button className="link" aria-expanded={open === 'record'}
+          onClick={() => setOpen(open === 'record' ? null : 'record')}>Lease record</button>
+        <button className="link" aria-expanded={open === 'deposit'}
+          onClick={() => setOpen(open === 'deposit' ? null : 'deposit')}>Deposit</button>
+      </div>
+      {open === 'record' && <LeaseRecord leaseId={lease.id} memberId={memberId} />}
+      {open === 'deposit' && <DepositPanel leaseId={lease.id} memberId={memberId} />}
     </div>
   )
 }

@@ -28,6 +28,10 @@ export type Lease = {
   smoking_policy: 'not_permitted' | 'permitted' | 'outdoors_only'
   pets_allowed: boolean
   pets_description: string | null
+  /** Set by end_lease(); null while the lease is running. */
+  ended_on?: string | null
+  end_reason?: string | null
+  end_note?: string | null
   pet_rent_amount: number | null
   renters_insurance_required: boolean
   parking_description: string | null
@@ -43,7 +47,9 @@ const LEASE_COLUMNS =
   'nsf_fee_amount, status, late_fee_auto_apply, late_fee_type, late_fee_amount, ' +
   'late_fee_grace_days, late_fee_daily_amount, late_fee_daily_start_days, fee_payer, ' +
   'smoking_policy, pets_allowed, pets_description, pet_rent_amount, ' +
-  'renters_insurance_required, parking_description, utilities, additional_terms'
+  'renters_insurance_required, parking_description, utilities, additional_terms, ' +
+  // How it ended, once it has — see db/migrations/033_lease_endings.sql.
+  'ended_on, end_reason, end_note'
 
 export type LeaseTenant = {
   id: string

@@ -19,6 +19,8 @@ type Lease = {
   status: string
   start_date: string
   end_date: string | null
+  /** Set once the lease has ended (033). */
+  ended_on?: string | null
   rent_due_day: number
   deposit_amount: number
   fee_payer: 'landlord' | 'tenant'
@@ -41,10 +43,15 @@ export function TenantDashboard({ memberId }: Props) {
     // No explicit filter — RLS already scopes both to this tenant.
     supabase
       .from('leases')
-      .select('id, unit_id, rent_amount, status, start_date, end_date, rent_due_day, deposit_amount, fee_payer')
+      .select('id, unit_id, rent_amount, status, start_date, end_date, ended_on, rent_due_day, deposit_amount, fee_payer')
       .then(({ data, error }) => {
         if (error) setError(describeError(error))
-        else setLeases(data as unknown as Lease[])
+        // The current lease first. Someone who moved units, or whose old
+        // lease ended, can see more than one — and leases[0] is what this
+        // whole screen is about.
+        else setLeases((data as unknown as Lease[]).sort((a, b) =>
+          Number(a.status === 'ended') - Number(b.status === 'ended')
+          || b.start_date.localeCompare(a.start_date)))
       })
     fetchCharges()
       .then(setCharges)
@@ -111,7 +118,10 @@ export function TenantDashboard({ memberId }: Props) {
   const overdue = charges.filter(isOverdue)
   const lease = leases[0]
 
-  if (signing && !signing.tenant_signed) {
+  const ended = lease.status === 'ended'
+
+  // An ended lease is not waiting for anyone's signature.
+  if (signing && !signing.tenant_signed && !ended) {
     return (
       <div>
         <h2>Your lease is waiting for you</h2>
@@ -136,6 +146,18 @@ export function TenantDashboard({ memberId }: Props) {
 
   return (
     <div>
+      {ended && (
+        <div className="card-list" style={{ marginTop: 0, marginBottom: '1.5rem' }}>
+          <div>
+            <strong>Your lease ended on {lease.ended_on ?? lease.end_date}.</strong>
+            <div className="muted">
+              {owed > 0
+                ? 'You can still see and pay what\u2019s owed below. For anything else, contact your landlord.'
+                : 'Nothing is owed. For anything else, contact your landlord.'}
+            </div>
+          </div>
+        </div>
+      )}
       <h2>What you owe</h2>
       <div className="card-list">
         <div>
@@ -207,7 +229,8 @@ export function TenantDashboard({ memberId }: Props) {
       <div style={{ display: 'flex', justifyContent: 'space-between',
                     alignItems: 'center', marginTop: '2rem' }}>
         <h2>Repairs</h2>
-        {!reporting && (
+        {/* Not for a unit you've left — the database refuses it too (033). */}
+        {!reporting && !ended && (
           <button className="link" onClick={() => setReporting(true)}>
             + Report a problem
           </button>
