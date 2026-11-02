@@ -155,7 +155,7 @@ select assert((select count(*) from job_entries) = 0,
   'a tenant does not see what the repair cost the landlord');
 
 -- ------------------------------------------------ push subscriptions --
--- send-request-notifications.mjs needs to read across a whole org's
+-- send-push-notifications.mjs needs to read across a whole org's
 -- admin/PM subscriptions, but it does that as the postgres superuser
 -- (bypassing RLS entirely, like create-test-user.sh); what RLS actually
 -- has to hold is that one member can never see or touch another's row.

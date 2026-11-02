@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Property Management</title>
     <!--
+      What makes "Add to Home Screen" install a real app rather than a
+      bookmark. iPhones only allow push notifications for a site installed
+      this way, so without these a technician on an iPhone could never get
+      a repair alert. display: standalone in the manifest is the part iOS
+      checks.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Properties" />
+    <meta name="theme-color" content="#2f5fd6" />
+    <!--
       Applies a saved light/dark choice before the first paint. Without it
       the page paints from the default palette — which follows the OS —
       and then flips once the bundle loads, so anyone who has deliberately

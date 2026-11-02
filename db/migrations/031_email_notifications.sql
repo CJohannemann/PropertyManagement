@@ -12,7 +12,7 @@
 --      notification is unchanged.
 --
 --   2. notifications.emailed_at / email_attempts: deploy/selfhost/
---      send-request-notifications.mjs emails each notification once, via
+--      send-email-notifications.mjs emails each notification once, via
 --      the same Brevo SMTP account auth emails already use, and records it
 --      here. Notifications that existed before this migration are marked as
 --      already emailed, so turning this on does not mail out the backlog.

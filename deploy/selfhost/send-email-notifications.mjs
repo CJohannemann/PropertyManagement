@@ -16,7 +16,7 @@
 //     manager in the organization
 // Disabled members are never emailed.
 //
-// Same database access as send-request-notifications.mjs: docker compose
+// Same database access as send-push-notifications.mjs: docker compose
 // exec psql, values passed as -v variables and referenced as :'name'.
 //
 // A failed send is retried on later ticks, up to MAX_ATTEMPTS, rather than

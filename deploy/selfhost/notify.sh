@@ -3,11 +3,13 @@
 # Run every two minutes by property-management-notify.timer. Sends two
 # things, independently:
 #
-#   send-request-notifications.mjs  browser push to admins/PMs about new
-#                                   maintenance requests
-#   send-email-notifications.mjs    email for every notification not yet
-#                                   emailed — the office, technicians at
-#                                   the property, tenants — via Brevo SMTP
+#   send-push-notifications.mjs   phone/browser push for every
+#                                 notification, to whoever turned
+#                                 notifications on in the app
+#   send-email-notifications.mjs  email for every notification
+#
+# Both follow the same rule for who hears about what: the office, the
+# technicians who service the property, the tenant — see either script.
 #
 # Each runs even if the other fails (push not set up must not stop email),
 # and the script still exits non-zero if either did, so the failure shows
@@ -35,6 +37,6 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 status=0
-node send-request-notifications.mjs || status=1
+node send-push-notifications.mjs || status=1
 node send-email-notifications.mjs || status=1
 exit "$status"

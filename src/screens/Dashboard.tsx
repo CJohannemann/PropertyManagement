@@ -5,7 +5,9 @@ import { navigate, APP_SECTIONS, TECH_SECTIONS, type Route } from '../lib/route'
 import { greeting, todayLong } from '../lib/dashboard'
 import { NotificationBell } from './NotificationBell'
 import { SettingsMenu } from './SettingsMenu'
-import { pushSupported, pushPermission, enablePushNotifications } from '../lib/push'
+import {
+  pushSupported, pushPermission, enablePushNotifications, needsHomeScreenForPush,
+} from '../lib/push'
 import { AdminDashboard } from './dashboards/AdminDashboard'
 import { PropertyManagerDashboard } from './dashboards/PropertyManagerDashboard'
 import { TechnicianDashboard } from './dashboards/TechnicianDashboard'
@@ -107,9 +109,11 @@ export function Dashboard({ section, propertyId }: Props) {
               then never showing them. The RLS policy in 023 already
               scopes it: an unaddressed notification stays management-only. */}
           <NotificationBell organizationId={membership.organization_id} />
-          {(membership.role === 'admin' || membership.role === 'property_manager') && (
-            <NotificationsToggle memberId={membership.id} />
-          )}
+          {/* Everyone, not just the office: a technician is alerted to
+              repairs at their properties and to job offers, a tenant to
+              their repair being booked. Each only gets what's addressed to
+              them — see deploy/selfhost/send-push-notifications.mjs. */}
+          <NotificationsToggle memberId={membership.id} />
           {/* Only admins and property managers have a /settings screen —
               the other two dashboards ignore the section entirely — so
               only they are offered the way in. Appearance and sign out
@@ -169,41 +173,73 @@ export function Dashboard({ section, propertyId }: Props) {
   )
 }
 
-/** Lets an admin/PM opt into a browser push when a new request comes in. */
+/**
+ * Lets anyone opt into phone/browser alerts for their notifications.
+ *
+ * Every state is one short link in the header, with any explanation in a
+ * popover: this sits beside the bell on a phone-width header, and a
+ * sentence here squeezed the greeting into a column.
+ */
 function NotificationsToggle({ memberId }: { memberId: string }) {
   const [permission, setPermission] = useState(pushPermission())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
 
-  if (!pushSupported || permission === 'granted') return null
+  // Already on, or this browser can't do it and there's nothing to say.
+  const iphoneTab = !pushSupported && needsHomeScreenForPush()
+  if (!iphoneTab && (!pushSupported || permission === 'granted')) return null
 
-  if (permission === 'denied') {
-    return (
-      <span className="muted" style={{ fontSize: '0.85rem' }}>
-        Notifications blocked — allow them in your browser's site settings.
-      </span>
-    )
+  async function enable() {
+    setBusy(true); setError(null)
+    try {
+      await enablePushNotifications(memberId)
+      setPermission(pushPermission())
+    } catch (err) {
+      setError(errorMessage(err))
+      setOpen(true)
+    }
+    setBusy(false)
   }
 
+  const explanation = iphoneTab ? (
+    <>
+      To get alerts on this iPhone, add the app to your home screen: tap
+      {' '}<strong>Share</strong>, then <strong>Add to Home Screen</strong>.
+      Open it from the new icon and tap <strong>Turn on alerts</strong>.
+    </>
+  ) : permission === 'denied' ? (
+    <>
+      Alerts are blocked for this site. Allow notifications for it in your
+      browser's or phone's site settings, then reload.
+    </>
+  ) : error ? (
+    <span className="error-text">{error}</span>
+  ) : null
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+    <div style={{ position: 'relative' }}>
       <button
         className="link"
         disabled={busy}
-        onClick={async () => {
-          setBusy(true); setError(null)
-          try {
-            await enablePushNotifications(memberId)
-            setPermission(pushPermission())
-          } catch (err) {
-            setError(errorMessage(err))
-          }
-          setBusy(false)
+        style={{ whiteSpace: 'nowrap' }}
+        aria-expanded={explanation ? open : undefined}
+        onClick={() => {
+          if (iphoneTab || permission === 'denied') setOpen((v) => !v)
+          else enable()
         }}
       >
-        {busy ? 'Enabling…' : 'Enable notifications'}
+        {iphoneTab ? 'Get alerts'
+          : permission === 'denied' ? 'Alerts off'
+          : busy ? 'Turning on…' : 'Turn on alerts'}
       </button>
-      {error && <span className="error-text" style={{ fontSize: '0.85rem' }}>{error}</span>}
+      {open && explanation && (
+        <div className="card-list" style={{
+          position: 'absolute', right: 0, top: '1.75rem', width: '16rem', zIndex: 20,
+        }}>
+          <div style={{ fontSize: '0.9rem' }}>{explanation}</div>
+        </div>
+      )}
     </div>
   )
 }

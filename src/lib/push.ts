@@ -25,9 +25,24 @@ function urlBase64ToUint8Array(base64url: string): Uint8Array {
 }
 
 /**
+ * iPhone and iPad only offer Web Push to a site added to the home screen
+ * and opened from there — in a Safari tab, PushManager simply doesn't
+ * exist. Telling that case apart from "this browser can't" lets the app
+ * say how to get alerts instead of silently offering nothing.
+ */
+export function needsHomeScreenForPush(): boolean {
+  if (typeof window === 'undefined' || VAPID_PUBLIC_KEY.length === 0) return false
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches
+    || (navigator as Navigator & { standalone?: boolean }).standalone === true
+  return ios && !standalone
+}
+
+/**
  * Asks the browser for notification permission, subscribes to Web Push,
  * and stores the subscription so
- * deploy/selfhost/send-request-notifications.mjs can find it. Must be
+ * deploy/selfhost/send-push-notifications.mjs can find it. Must be
  * called from a user gesture (a click) — browsers ignore or block a
  * permission prompt that isn't.
  */
@@ -50,14 +65,15 @@ export async function enablePushNotifications(memberId: string): Promise<void> {
     throw new Error('Subscription is missing required fields')
   }
 
-  const { error } = await supabase.from('push_subscriptions').upsert(
-    {
-      org_member_id: memberId,
-      endpoint: json.endpoint,
-      p256dh: json.keys.p256dh,
-      auth: json.keys.auth,
-    },
-    { onConflict: 'endpoint' },
-  )
+  // Through a function rather than an upsert: if this phone was enabled
+  // by a different account before (two test logins on one device), that
+  // row isn't ours to update, and the device should follow whoever turned
+  // notifications on most recently. See db/migrations/032.
+  const { error } = await supabase.rpc('register_push_subscription', {
+    member: memberId,
+    sub_endpoint: json.endpoint,
+    sub_p256dh: json.keys.p256dh,
+    sub_auth: json.keys.auth,
+  })
   if (error) throw error
 }

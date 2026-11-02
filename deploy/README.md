@@ -153,9 +153,13 @@ else — check there first.
 A second systemd timer runs `deploy/selfhost/notify.sh` every 2 minutes,
 which sends two things:
 
-- **Browser push** for new maintenance requests, to the org's admins and
-  property managers who turned notifications on in the app. Needs the VAPID
+- **Phone/browser push** for every in-app notification, to whoever it's
+  for — the same people the email goes to, below — on each device where
+  they tapped **Turn on alerts** in the app's header. Needs the VAPID
   keypair in `deploy/selfhost/.env` — `generate-secrets.sh` creates it.
+  On an iPhone, push only works once the site is added to the home screen
+  (Share → Add to Home Screen) and opened from that icon; the app shows
+  "Get alerts" with those steps when it's opened in a Safari tab.
 - **Email** for every in-app notification, through the same Brevo SMTP
   account sign-up emails use (the `SMTP_*` values in
   `deploy/selfhost/.env` — nothing extra to configure). A new repair goes
