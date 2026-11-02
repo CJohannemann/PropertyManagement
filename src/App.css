@@ -88,6 +88,8 @@ button.link {
 }
 
 .app-header {
+  /* The notification panel anchors here — see .notification-panel. */
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -335,15 +337,19 @@ button.link {
 }
 
 /*
- * Anchored to the right edge of the header rather than centred: on a
- * narrow screen a panel centred on the bell would run off the side.
+ * Anchored to the header, not the bell. It used to hang from the bell's
+ * right edge, which was fine while the bell was the last thing in the
+ * header — but "Turn on alerts" and the gear sit to its right now, so on
+ * a phone the panel ran off the left of the screen and cut every
+ * notification in half. On a phone it spans the header with a 1rem
+ * gutter; wider, it sits at the header's right edge.
  * max-height keeps a long history from covering the whole screen.
  */
 .notification-panel {
   position: absolute;
-  top: 1.8rem;
-  right: 0;
-  width: min(20rem, calc(100vw - 2rem));
+  top: calc(100% - 0.5rem);
+  right: 1rem;
+  width: min(22rem, calc(100vw - 2rem));
   max-height: 60vh;
   overflow-y: auto;
   background: var(--card);

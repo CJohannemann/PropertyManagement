@@ -48,13 +48,16 @@ export function NotificationBell({ organizationId }: Props) {
   }
 
   return (
-    <div style={{ position: 'relative' }}>
+    // Deliberately not position: relative — the panel below anchors to the
+    // header instead (see .notification-panel in App.css). The badge
+    // anchors to the button, which is.
+    <div>
       <button
         className="link"
         onClick={toggle}
         aria-expanded={open}
         aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
-        style={{ fontSize: '1.1rem', lineHeight: 1 }}
+        style={{ fontSize: '1.1rem', lineHeight: 1, position: 'relative' }}
       >
         <span aria-hidden="true">🔔</span>
         {unread > 0 && <span className="bell-badge">{unread > 9 ? '9+' : unread}</span>}
