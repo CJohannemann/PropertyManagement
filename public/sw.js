@@ -21,6 +21,16 @@ self.addEventListener('push', (event) => {
     // A push with no/unparseable payload still deserves *a* notification
     // rather than silently doing nothing.
   }
+  // The red count on the home-screen icon, from the unread total the
+  // server sends with each push (send-push-notifications.mjs). The app
+  // keeps it in step once opened (src/lib/appBadge.ts).
+  if (typeof data.badge === 'number' && self.navigator && 'setAppBadge' in self.navigator) {
+    const set = data.badge > 0
+      ? self.navigator.setAppBadge(data.badge)
+      : self.navigator.clearAppBadge()
+    if (set && set.catch) set.catch(() => {})
+  }
+
   event.waitUntil(
     self.registration.showNotification(data.title || 'Property Management', {
       body: data.body || '',

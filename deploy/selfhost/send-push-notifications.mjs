@@ -60,7 +60,17 @@ const due = JSON.parse(psql(`
   select coalesce(jsonb_agg(row order by row.created_at), '[]') from (
     select n.id, n.title, n.body, n.link, n.urgency, n.created_at,
            (select coalesce(jsonb_agg(jsonb_build_object(
-                     'id', ps.id, 'endpoint', ps.endpoint, 'p256dh', ps.p256dh, 'auth', ps.auth
+                     'id', ps.id, 'endpoint', ps.endpoint, 'p256dh', ps.p256dh, 'auth', ps.auth,
+                     -- What this person's bell would count right now, for
+                     -- the red number on their home-screen icon. Same rule
+                     -- as the bell: theirs, plus the office's unaddressed
+                     -- ones if they are office.
+                     'unread', (select count(*) from notifications u
+                                 where u.organization_id = om.organization_id
+                                   and u.read_at is null
+                                   and (u.org_member_id = om.id
+                                        or (u.org_member_id is null
+                                            and om.role in ('admin', 'property_manager'))))
                    )), '[]')
               from push_subscriptions ps
               join org_members om on om.id = ps.org_member_id
@@ -81,7 +91,7 @@ if (due.length === 0) process.exit(0)
 
 let pushed = 0
 for (const n of due) {
-  const payload = JSON.stringify({
+  const base = {
     title: n.title,
     body: n.body ?? '',
     link: n.link ?? '/dashboard',
@@ -89,9 +99,11 @@ for (const n of due) {
     // instead of stacking, should one ever be sent twice.
     tag: n.id,
     urgent: n.urgency === 'high',
-  })
+  }
 
   for (const sub of n.subscriptions) {
+    // Per device: the badge is the recipient's own unread count.
+    const payload = JSON.stringify({ ...base, badge: Number(sub.unread) || 0 })
     try {
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },

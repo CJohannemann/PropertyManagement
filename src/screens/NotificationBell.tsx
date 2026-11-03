@@ -4,6 +4,7 @@ import {
   fetchNotifications, markAllRead, timeAgo, type Notification,
 } from '../lib/notifications'
 import { navigate, type Route } from '../lib/route'
+import { setAppBadgeCount } from '../lib/appBadge'
 
 type Props = { organizationId: string }
 
@@ -30,7 +31,22 @@ export function NotificationBell({ organizationId }: Props) {
 
   useEffect(reload, [organizationId])
 
+  // Coming back to the app — from the lock screen, another app, or a tap
+  // on a notification — reloads the list, so the count is current rather
+  // than whatever it was when the app was last in front.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') reload() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [organizationId])
+
   const unread = items?.filter((n) => !n.read_at).length ?? 0
+
+  // The home-screen icon's red count follows the bell's: up when something
+  // arrives, cleared once the panel has been opened and everything read.
+  useEffect(() => {
+    if (items !== null) setAppBadgeCount(unread)
+  }, [items, unread])
 
   async function toggle() {
     const opening = !open
