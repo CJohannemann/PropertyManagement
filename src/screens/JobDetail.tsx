@@ -129,8 +129,9 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
         </div>
       )}
 
+      {/* Receipts are added with the purchase they belong to, in Log work
+          above; this section only shows what has been attached. */}
       <h3 style={{ marginTop: '2rem' }}>Receipts</h3>
-      {canEdit && <ReceiptUpload jobId={job.id} onUploaded={load} onError={setError} />}
       {/* Said here, under Receipts, rather than at the top of the job: it
           is the file service that is unreachable, not the job. */}
       {receiptsError ? (
@@ -166,40 +167,6 @@ function ReceiptRow({ path }: { path: string }) {
   )
 }
 
-function ReceiptUpload({
-  jobId, onUploaded, onError,
-}: { jobId: string; onUploaded: () => void; onError: (m: string) => void }) {
-  const [busy, setBusy] = useState(false)
-  return (
-    <div className="field">
-      <label htmlFor="receipt">Add a receipt photo</label>
-      <input
-        id="receipt"
-        type="file"
-        // No `capture`, which limited a phone to the camera: a receipt
-        // photographed earlier, or emailed as a PDF, has to be pickable
-        // too. The phone still offers Take Photo first.
-        accept="image/*,application/pdf"
-        disabled={busy}
-        onChange={async (e) => {
-          const file = e.target.files?.[0]
-          if (!file) return
-          setBusy(true)
-          try {
-            await uploadReceipt(jobId, file)
-            onUploaded()
-          } catch (err) {
-            onError(errorMessage(err))
-          }
-          setBusy(false)
-          e.target.value = ''
-        }}
-      />
-      {busy && <span className="muted">Uploading…</span>}
-    </div>
-  )
-}
-
 function AddEntry({
   jobId, memberId, onAdded,
 }: { jobId: string; memberId: string; onAdded: () => void }) {
@@ -209,6 +176,10 @@ function AddEntry({
   const [miles, setMiles] = useState('')
   const [cost, setCost] = useState('')
   const [vendor, setVendor] = useState('')
+  const [receipt, setReceipt] = useState<File | null>(null)
+  // Bumped after a save to remount the file input, which is the only way
+  // to clear what it shows as chosen.
+  const [receiptKey, setReceiptKey] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -216,7 +187,19 @@ function AddEntry({
     e.preventDefault()
     setBusy(true); setError(null)
     const num = (s: string) => (s.trim() === '' ? null : Number(s))
+    // A purchase needs its receipt. Checked here as well as by `required`
+    // on the input, since that is the attribute some phone browsers skip.
+    if (type === 'material' && !receipt) {
+      setError('Add a photo of the receipt for this purchase.')
+      setBusy(false)
+      return
+    }
     try {
+      // The receipt goes up first: if it fails, nothing is logged and the
+      // technician can retry the whole thing, rather than ending up with a
+      // purchase in the log and no receipt behind it.
+      const attach = type === 'material' || type === 'labor' ? receipt : null
+      if (attach) await uploadReceipt(jobId, attach)
       await addJobEntry({
         jobId, technicianId: memberId, entryType: type,
         description: description.trim() || null,
@@ -230,6 +213,7 @@ function AddEntry({
         vendor: type === 'material' ? (vendor.trim() || null) : null,
       })
       setDescription(''); setHours(''); setMiles(''); setCost(''); setVendor('')
+      setReceipt(null); setReceiptKey((k) => k + 1)
       onAdded()
     } catch (err) {
       setError(errorMessage(err))
@@ -296,6 +280,25 @@ function AddEntry({
               </span>
             </div>
           </>
+        )}
+
+        {(type === 'material' || type === 'labor') && (
+          <div className="field">
+            <label htmlFor="e-receipt">
+              {type === 'material' ? 'Receipt photo' : 'Invoice or receipt (optional)'}
+            </label>
+            <input
+              key={receiptKey}
+              id="e-receipt"
+              type="file"
+              // No `capture`, which limited a phone to the camera: a receipt
+              // photographed earlier, or emailed as a PDF, has to be pickable
+              // too. The phone still offers Take Photo first.
+              accept="image/*,application/pdf"
+              required={type === 'material'}
+              onChange={(e) => setReceipt(e.target.files?.[0] ?? null)}
+            />
+          </div>
         )}
 
         <div className="field">
