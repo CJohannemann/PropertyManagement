@@ -89,7 +89,13 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
           <div>
             <strong>{money(Number(totals.total_cost))}</strong> spent
             <div className="muted">
-              {Number(totals.total_hours)} hour(s) · {Number(totals.total_miles)} mile(s)
+              {/* A job that has been started counts as at least one hour,
+                  however little time is logged against it — the minimum
+                  for showing up. Display only: the logged entries keep
+                  the real figures. */}
+              {job.status === 'in_progress' || job.status === 'completed'
+                ? Math.max(1, Number(totals.total_hours))
+                : Number(totals.total_hours)} hour(s) · {Number(totals.total_miles)} mile(s)
             </div>
             {/* Labor is counted but not priced: technicians are paid
                 outside the app, so pricing hours here would produce a
