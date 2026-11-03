@@ -7,6 +7,7 @@ import {
 } from '../../lib/charges'
 import { fetchRequests, type MaintenanceRequest } from '../../lib/maintenance'
 import { RequestRepair } from '../RequestRepair'
+import { RequestPhotos } from '../RequestPhotos'
 import { TenantLease } from '../TenantLease'
 import { PayRent } from '../PayRent'
 import { stripeConfigured } from '../../lib/payments'
@@ -256,6 +257,10 @@ export function TenantDashboard({ memberId }: Props) {
               </div>
               <div>{r.description}</div>
               <div className="muted">Reported {r.created_at.slice(0, 10)}</div>
+              {/* Photos can be added until the repair is finished; after
+                  that there is nothing left for them to inform. */}
+              <RequestPhotos requestId={r.id}
+                canAdd={r.status !== 'completed' && r.status !== 'closed'} />
             </div>
           ))}
         </div>
