@@ -186,24 +186,34 @@ function NotificationsToggle({ memberId }: { memberId: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  // Permission is granted but registering this device with the server
+  // failed. Shown rather than swallowed: hiding it left a phone that had
+  // allowed notifications and still never got one, with nothing on screen
+  // to say why.
+  const [registerFailed, setRegisterFailed] = useState(false)
 
   // Alerts already allowed: make sure this phone is really registered to
   // whoever is signed in. See ensurePushSubscription() for why permission
-  // alone isn't enough. Quiet on failure — the bell and email still work,
-  // and the next app open tries again.
+  // alone isn't enough.
   useEffect(() => {
-    if (permission === 'granted') ensurePushSubscription(memberId).catch(() => {})
+    if (permission !== 'granted') return
+    ensurePushSubscription(memberId)
+      .then(() => { setRegisterFailed(false); setError(null) })
+      .catch((err) => { setRegisterFailed(true); setError(errorMessage(err)) })
   }, [memberId, permission])
 
   // Already on, or this browser can't do it and there's nothing to say.
   const iphoneTab = !pushSupported && needsHomeScreenForPush()
-  if (!iphoneTab && (!pushSupported || permission === 'granted')) return null
+  if (!iphoneTab && (!pushSupported || (permission === 'granted' && !registerFailed))) return null
 
   async function enable() {
     setBusy(true); setError(null)
     try {
-      await enablePushNotifications(memberId)
+      if (permission === 'granted') await ensurePushSubscription(memberId)
+      else await enablePushNotifications(memberId)
       setPermission(pushPermission())
+      setRegisterFailed(false)
+      setOpen(false)
     } catch (err) {
       setError(errorMessage(err))
       setOpen(true)
@@ -223,7 +233,18 @@ function NotificationsToggle({ memberId }: { memberId: string }) {
       browser's or phone's site settings, then reload.
     </>
   ) : error ? (
-    <span className="error-text">{error}</span>
+    <>
+      <span className="error-text">
+        {registerFailed ? 'Notifications are allowed, but this phone couldn\u2019t be connected for alerts: ' : ''}
+        {error}
+      </span>
+      {registerFailed && (
+        <button className="link" style={{ display: 'block', marginTop: '0.5rem' }}
+          disabled={busy} onClick={enable}>
+          {busy ? 'Trying…' : 'Try again'}
+        </button>
+      )}
+    </>
   ) : null
 
   return (
@@ -234,12 +255,12 @@ function NotificationsToggle({ memberId }: { memberId: string }) {
         style={{ whiteSpace: 'nowrap' }}
         aria-expanded={explanation ? open : undefined}
         onClick={() => {
-          if (iphoneTab || permission === 'denied') setOpen((v) => !v)
+          if (iphoneTab || permission === 'denied' || registerFailed) setOpen((v) => !v)
           else enable()
         }}
       >
         {iphoneTab ? 'Get alerts'
-          : permission === 'denied' ? 'Alerts off'
+          : permission === 'denied' || registerFailed ? 'Alerts off'
           : busy ? 'Turning on…' : 'Turn on alerts'}
       </button>
       {open && explanation && (
