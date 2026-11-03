@@ -29,7 +29,13 @@ function TechnicianJobs({ memberId }: { memberId: string }) {
       setJobs(rows)
       // Keeps the open job's own status/date current after an edit,
       // instead of showing a stale copy until you navigate away.
-      if (selected) setSelected(rows.find((j) => j.id === selected.id) ?? null)
+      //
+      // From the *current* selection, not the one this function closed
+      // over: "← All jobs" clears the selection and then reloads, and the
+      // closed-over copy still held the job — so when the reload landed it
+      // reopened the job the person had just left. The back link looked
+      // like it did nothing.
+      setSelected((cur) => (cur ? rows.find((j) => j.id === cur.id) ?? null : null))
     } catch (e) {
       setError(errorMessage(e))
     }

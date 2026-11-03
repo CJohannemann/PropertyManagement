@@ -25,17 +25,21 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
   const [entries, setEntries] = useState<JobEntry[] | null>(null)
   const [totals, setTotals] = useState<JobTotals | null>(null)
   const [receipts, setReceipts] = useState<string[]>([])
+  const [receiptsError, setReceiptsError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // Each part loads on its own. With Promise.all, one failure — receipts,
+  // which come from the separate file storage service — left the log on
+  // "Loading…" forever and put a bare error at the top of the job.
   async function load() {
-    try {
-      const [e, t, r] = await Promise.all([
-        fetchJobEntries(job.id), fetchJobTotals(job.id), listReceipts(job.id),
-      ])
-      setEntries(e); setTotals(t); setReceipts(r)
-    } catch (e) {
-      setError(errorMessage(e))
-    }
+    const [e, t, r] = await Promise.allSettled([
+      fetchJobEntries(job.id), fetchJobTotals(job.id), listReceipts(job.id),
+    ])
+    if (e.status === 'fulfilled') setEntries(e.value)
+    else setError(errorMessage(e.reason))
+    if (t.status === 'fulfilled') setTotals(t.value)
+    if (r.status === 'fulfilled') { setReceipts(r.value); setReceiptsError(null) }
+    else setReceiptsError(errorMessage(r.reason))
   }
 
   useEffect(() => { load() }, [job.id])
@@ -127,7 +131,14 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
 
       <h3 style={{ marginTop: '2rem' }}>Receipts</h3>
       {canEdit && <ReceiptUpload jobId={job.id} onUploaded={load} onError={setError} />}
-      {receipts.length === 0 ? (
+      {/* Said here, under Receipts, rather than at the top of the job: it
+          is the file service that is unreachable, not the job. */}
+      {receiptsError ? (
+        <p className="error-text">
+          Receipts can't be loaded right now ({receiptsError}). The rest of
+          the job is unaffected.
+        </p>
+      ) : receipts.length === 0 ? (
         <p className="empty-state">No receipts yet.</p>
       ) : (
         <div className="card-list">

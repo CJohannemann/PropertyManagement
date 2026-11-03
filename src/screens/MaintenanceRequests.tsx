@@ -29,7 +29,10 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
       const [reqs, js] = await Promise.all([fetchRequests(), fetchJobs()])
       setRequests(reqs)
       setJobs(js)
-      if (selectedJob) setSelectedJob(js.find((j) => j.id === selectedJob.id) ?? null)
+      // From the current selection, not the closed-over one — otherwise
+      // going back reopens the job when this reload lands. See the same
+      // fix in TechnicianDashboard.tsx.
+      setSelectedJob((cur) => (cur ? js.find((j) => j.id === cur.id) ?? null : null))
       const { data } = await supabase
         .from('org_members')
         .select('id, full_name')
