@@ -102,7 +102,9 @@ step "5. File storage"
 # upload failed. storage-api adds its own columns to storage.buckets on
 # first start, which the bucket migrations (011, 015, 033) can only fill in
 # afterwards — hence re-applying them once it is up.
-mkdir -p data/storage
+# Docker creates this itself from the volume mount; data/ is usually
+# root-owned (the database wrote it first), so a plain mkdir can fail.
+mkdir -p data/storage 2>/dev/null || true
 docker compose up -d storage
 echo "waiting for storage to respond..."
 wait_for "storage responding" bash -c \
