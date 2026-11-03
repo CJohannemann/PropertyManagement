@@ -7,6 +7,7 @@ import { NotificationBell } from './NotificationBell'
 import { SettingsMenu } from './SettingsMenu'
 import {
   pushSupported, pushPermission, enablePushNotifications, needsHomeScreenForPush,
+  ensurePushSubscription,
 } from '../lib/push'
 import { AdminDashboard } from './dashboards/AdminDashboard'
 import { PropertyManagerDashboard } from './dashboards/PropertyManagerDashboard'
@@ -185,6 +186,14 @@ function NotificationsToggle({ memberId }: { memberId: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+
+  // Alerts already allowed: make sure this phone is really registered to
+  // whoever is signed in. See ensurePushSubscription() for why permission
+  // alone isn't enough. Quiet on failure — the bell and email still work,
+  // and the next app open tries again.
+  useEffect(() => {
+    if (permission === 'granted') ensurePushSubscription(memberId).catch(() => {})
+  }, [memberId, permission])
 
   // Already on, or this browser can't do it and there's nothing to say.
   const iphoneTab = !pushSupported && needsHomeScreenForPush()

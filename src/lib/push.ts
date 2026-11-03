@@ -71,7 +71,29 @@ export async function enablePushNotifications(memberId: string): Promise<void> {
   if (permission !== 'granted') {
     throw new Error('Notification permission was not granted')
   }
+  await subscribeAndRegister(memberId)
+}
 
+/**
+ * Makes sure this device is subscribed and registered to the signed-in
+ * member, whenever permission is already granted. Run on every app load.
+ *
+ * Permission and a registered subscription are two different things, and
+ * the app only looked at the first: an attempt that got permission but
+ * failed to subscribe (the iPhone "active service worker" error, before
+ * that was fixed) hid "Turn on alerts" for good while the server had no
+ * device to push to — email arrived, phone alerts never did. This repairs
+ * that silently (no prompt: permission is already given), and also moves
+ * the device to whoever is signed in now, so a phone used for two test
+ * accounts alerts for the one in use.
+ */
+export async function ensurePushSubscription(memberId: string): Promise<void> {
+  if (!pushSupported || Notification.permission !== 'granted') return
+  await subscribeAndRegister(memberId)
+}
+
+async function subscribeAndRegister(memberId: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured')
   // subscribe() needs an *active* service worker. register() resolves as
   // soon as the worker is installing, and subscribing then fails with
   // "Subscribing for push requires an active service worker" — every time
@@ -82,10 +104,12 @@ export async function enablePushNotifications(memberId: string): Promise<void> {
     navigator.serviceWorker.ready, 15000,
     'The notification service took too long to start — close the app and try again.',
   )
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-  })
+  // Reuse an existing subscription; only create one if there is none.
+  const subscription = (await registration.pushManager.getSubscription())
+    ?? await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    })
   const json = subscription.toJSON()
   if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
     throw new Error('Subscription is missing required fields')
