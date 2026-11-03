@@ -19,3 +19,6 @@ deploy/selfhost/data/
 *.docx
 *.xlsx
 /private/
+
+# Python bytecode (deploy/sync-nginx-locations.py)
+__pycache__/
