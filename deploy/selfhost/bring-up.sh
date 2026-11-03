@@ -96,6 +96,21 @@ wait_for "REST API responding" bash -c "$(declare -f rest_ok); rest_ok" \
   || { echo "check: docker compose logs rest" >&2; exit 1; }
 echo "REST API responding, good."
 
+step "5. File storage"
+# Receipts, repair photos and lease documents. This step was missing: the
+# service is defined in docker-compose.yml but nothing started it, so every
+# upload failed. storage-api adds its own columns to storage.buckets on
+# first start, which the bucket migrations (011, 015, 033) can only fill in
+# afterwards — hence re-applying them once it is up.
+mkdir -p data/storage
+docker compose up -d storage
+echo "waiting for storage to respond..."
+wait_for "storage responding" bash -c \
+  "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5002/status | grep -q 200" \
+  || { echo "check: docker compose logs storage" >&2; exit 1; }
+bash apply-migrations.sh
+echo "storage responding, buckets configured."
+
 step "Backend up"
 cat <<EOF
 Reachable only from this machine so far (127.0.0.1:8002 / :9998).
@@ -108,4 +123,8 @@ Next, to put it on ${APP_URL}:
   sudo ln -sf /etc/nginx/sites-available/property-management /etc/nginx/sites-enabled/
   sudo nginx -t && sudo systemctl reload nginx
   sudo certbot --nginx -d \$(echo "${APP_URL}" | sed 's|https\?://||')
+
+Later, when deploy/nginx-property-management.conf gains a location block,
+add it to the live (certbot-edited) site without re-copying:
+  sudo python3 deploy/sync-nginx-locations.py --apply
 EOF
