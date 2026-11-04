@@ -7,7 +7,11 @@ import {
 } from '../lib/payments'
 import { chargeLabel, type ChargeWithPlace } from '../lib/charges'
 
-type Props = { charge: ChargeWithPlace; onDone: () => void }
+type Props = {
+  charge: ChargeWithPlace
+  /** `started` is true when the bank accepted the payment, false on cancel. */
+  onDone: (started: boolean) => void
+}
 
 /**
  * Paying one rent charge by bank transfer.
@@ -31,7 +35,7 @@ export function PayRent({ charge, onDone }: Props) {
       <div className="card-list" style={{ marginTop: '1rem' }}>
         <div>
           <p style={{ marginTop: 0 }}>Online payment isn't set up on this site yet.</p>
-          <button className="link" onClick={onDone}>Back</button>
+          <button className="link" onClick={() => onDone(false)}>Back</button>
         </div>
       </div>
     )
@@ -42,7 +46,7 @@ export function PayRent({ charge, onDone }: Props) {
       <div className="card-list" style={{ marginTop: '1rem' }}>
         <div>
           <p className="error-text" style={{ marginTop: 0 }}>{error}</p>
-          <button className="link" onClick={onDone}>Back</button>
+          <button className="link" onClick={() => onDone(false)}>Back</button>
         </div>
       </div>
     )
@@ -62,7 +66,7 @@ export function PayRent({ charge, onDone }: Props) {
 
 function PayRentForm({
   charge, breakdown, onDone,
-}: { charge: ChargeWithPlace; breakdown: PaymentBreakdown; onDone: () => void }) {
+}: { charge: ChargeWithPlace; breakdown: PaymentBreakdown; onDone: (started: boolean) => void }) {
   const stripe = useStripe()
   const elements = useElements()
   const [busy, setBusy] = useState(false)
@@ -118,7 +122,7 @@ function PayRentForm({
             Leave the money in your account until then — if the transfer
             bounces, the rent goes back to being owed.
           </p>
-          <button className="primary" onClick={onDone}>Done</button>
+          <button className="primary" onClick={() => onDone(true)}>Done</button>
         </div>
       </div>
     )
@@ -172,7 +176,7 @@ function PayRentForm({
         <button className="primary" type="submit" disabled={!stripe || busy}>
           {busy ? 'Starting…' : `Pay ${centsToMoney(breakdown.totalCents)}`}
         </button>
-        <button className="link" type="button" onClick={onDone}
+        <button className="link" type="button" onClick={() => onDone(false)}
           style={{ marginTop: '0.5rem' }} disabled={busy}>
           Cancel
         </button>

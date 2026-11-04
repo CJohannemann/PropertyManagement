@@ -38,6 +38,12 @@ export function TenantDashboard({ memberId }: Props) {
   const [viewingLease, setViewingLease] = useState(false)
   const [signing, setSigning] = useState<SigningStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Charges the tenant has just started paying, and when. Stripe tells the
+  // server about a payment by webhook, a few seconds to a minute after the
+  // tenant taps Pay — so straight after paying, the charge still reads as
+  // unpaid. Until the server catches up, these are shown as on their way,
+  // and the list is re-read until it does.
+  const [justPaid, setJustPaid] = useState<Record<string, number>>({})
 
   useEffect(() => {
     if (!supabase) return
@@ -69,6 +75,47 @@ export function TenantDashboard({ memberId }: Props) {
     }
   }, [leases])
 
+  // Re-read while a just-started payment hasn't reached the server yet, or
+  // one is still 'processing' — every 5s for the first three minutes after
+  // paying, which in Stripe's sandbox covers it settling too. Past that a
+  // real bank transfer takes days, so polling stops and the list refreshes
+  // whenever the tenant comes back to the app instead.
+  const inFlight = (charges ?? []).some(hasPaymentOnItsWay)
+  const pending = Object.keys(justPaid).length > 0
+  useEffect(() => {
+    const latest = Math.max(0, ...Object.values(justPaid))
+    if (!pending && !inFlight) return
+    if (Date.now() - latest > 3 * 60_000) return
+    const t = setInterval(() => {
+      if (Date.now() - latest > 3 * 60_000) { clearInterval(t); return }
+      loadCharges()
+    }, 5000)
+    return () => clearInterval(t)
+  }, [pending, inFlight, justPaid])
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadCharges()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
+  // Once the server knows about a payment, the local note is redundant.
+  useEffect(() => {
+    if (!charges) return
+    setJustPaid((cur) => {
+      const next = { ...cur }
+      let changed = false
+      for (const c of charges) {
+        if (next[c.id] && (hasPaymentOnItsWay(c) || outstanding(c) <= 0)) {
+          delete next[c.id]; changed = true
+        }
+      }
+      return changed ? next : cur
+    })
+  }, [charges])
+
   function loadRequests() {
     fetchRequests()
       .then(setRequests)
@@ -92,7 +139,8 @@ export function TenantDashboard({ memberId }: Props) {
     return (
       <PayRent
         charge={paying}
-        onDone={() => {
+        onDone={(started) => {
+          if (started) setJustPaid((cur) => ({ ...cur, [paying.id]: Date.now() }))
           setPaying(null)
           // An ACH payment is only 'processing' at this point, so the
           // balance won't have moved — but a failed start might have, and
@@ -172,6 +220,14 @@ export function TenantDashboard({ memberId }: Props) {
           ) : (
             <div className="muted">Nothing overdue.</div>
           )}
+          {/* Still counted as owed — it is, until the bank clears it —
+              but said, so the total doesn't read as the payment having
+              been ignored. */}
+          {owed > 0 && charges.some((c) => justPaid[c.id] || hasPaymentOnItsWay(c)) && (
+            <div className="muted">
+              A payment is on its way from your bank. This updates once it clears.
+            </div>
+          )}
           {owed > 0 && !stripeConfigured && (
             <p className="muted" style={{ marginTop: '0.75rem', marginBottom: 0 }}>
               Online payment isn't available here yet — pay as you do today
@@ -216,7 +272,13 @@ export function TenantDashboard({ memberId }: Props) {
                     {p.status === 'failed' && ' · did not clear'}
                   </div>
                 ))}
-              {stripeConfigured && outstanding(c) > 0 && (
+              {justPaid[c.id] && !hasPaymentOnItsWay(c) && (
+                <div className="muted">Payment started · on its way, not cleared yet</div>
+              )}
+              {/* No second Pay while one is on its way — the server refuses
+                  it anyway, and offering it invites paying twice. */}
+              {stripeConfigured && outstanding(c) > 0
+                && !justPaid[c.id] && !hasPaymentOnItsWay(c) && (
                 <button className="link" onClick={() => setPaying(c)}
                   style={{ marginTop: '0.5rem' }}>
                   Pay {money(outstanding(c))}
@@ -299,4 +361,9 @@ export function TenantDashboard({ memberId }: Props) {
       </div>
     </div>
   )
+}
+
+/** A payment on this charge that the bank has accepted but not yet cleared. */
+function hasPaymentOnItsWay(c: ChargeWithPlace): boolean {
+  return (c.payments ?? []).some((p) => p.status === 'pending' || p.status === 'processing')
 }
