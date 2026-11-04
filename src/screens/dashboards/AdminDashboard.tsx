@@ -10,7 +10,7 @@ import { QuickActions } from '../QuickActions'
 import { Upcoming } from '../Upcoming'
 import { RecentActivity } from '../RecentActivity'
 import { Settings } from '../Settings'
-import { Expenses } from '../Expenses'
+import { Finances } from '../Finances'
 import { MaintenanceRequests } from '../MaintenanceRequests'
 import { GettingPaid } from '../GettingPaid'
 
@@ -109,8 +109,8 @@ export function AdminDashboard({
     )
   }
 
-  if (section === '/expenses') {
-    return <Expenses organizationId={organizationId} isAdmin={true} />
+  if (section === '/finances') {
+    return <Finances organizationId={organizationId} isAdmin={true} />
   }
 
   if (section === '/maintenance') {

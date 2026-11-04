@@ -66,15 +66,16 @@ export function RentOverview({ organizationId }: Props) {
           {' '}({Math.round((collectedYear / billedEver) * 100)}%)
           {spentYear > 0 && (
             <>
-              {' · '}{money(spentYear)} spent on repairs
+              {' · '}{money(spentYear)} in expenses
               {' · '}<strong>{money(collectedYear - spentYear)} net</strong>
             </>
           )}
         </div>
         {spentYear > 0 && (
           <div className="muted" style={{ marginTop: '0.25rem', fontSize: '0.85rem' }}>
-            Net is rent collected less what you paid out on repairs. It doesn't
-            include your own unpaid time, a mortgage, tax or insurance.
+            Net is rent collected less expenses — repairs and the bills on the
+            Finances tab. It leaves out your own unpaid time, depreciation, and
+            the principal part of mortgage payments.
           </div>
         )}
       </div>
@@ -188,7 +189,7 @@ function TwelveMonths({ months }: { months: RentMonth[] }) {
       <div style={{ display: 'flex', gap: '1rem', margin: '0.5rem 0' }}>
         <Key color="var(--series-collected)" label="Collected" />
         <Key color="var(--series-outstanding)" label="Outstanding" />
-        {anySpend && <Key color="var(--series-spent)" label="Repairs" />}
+        {anySpend && <Key color="var(--series-spent)" label="Expenses" />}
       </div>
 
       {asTable ? (
@@ -200,7 +201,7 @@ function TwelveMonths({ months }: { months: RentMonth[] }) {
                 <th style={cell()}>Billed</th>
                 <th style={cell()}>Collected</th>
                 <th style={cell()}>Outstanding</th>
-                <th style={cell()}>Repairs</th>
+                <th style={cell()}>Expenses</th>
                 <th style={cell()}>Net</th>
               </tr>
             </thead>
@@ -317,7 +318,7 @@ function TwelveMonths({ months }: { months: RentMonth[] }) {
               ? `${monthLabel(shown.month, true)}: ${money(shown.collected)} collected`
                 + ` of ${money(shown.billed)} billed`
                 + (shown.outstanding > 0 ? ` · ${money(shown.outstanding)} outstanding` : '')
-              + (shown.spent > 0 ? ` · ${money(shown.spent)} on repairs` : '')
+              + (shown.spent > 0 ? ` · ${money(shown.spent)} in expenses` : '')
               : 'Tap a month for its figures.'}
           </div>
         </>

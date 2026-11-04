@@ -1,21 +1,22 @@
 import { useEffect, useState } from 'react'
-import { supabase, errorMessage } from '../lib/supabase'
+import { errorMessage } from '../lib/supabase'
 import { money } from '../lib/charges'
 import { navigate } from '../lib/route'
 import {
-  EXPENSE_CATEGORIES, categoryInfo, totalsByCategory,
-  fetchExpenseLines, addExpense, deleteExpense,
-  uploadExpenseReceipt, expenseReceiptUrl, fetchMileageRate,
-  type ExpenseLine, type ExpenseCategory,
+  EXPENSE_CATEGORIES, PAID_BY, categoryInfo, totalsByCategory,
+  fetchExpenseLines, fetchExpense, saveExpense, deleteExpense,
+  uploadExpenseReceipt, removeExpenseReceipt, expenseReceiptUrl, fetchMileageRate,
+  type ExpenseLine, type ExpenseCategory, type ExpenseRecord,
 } from '../lib/expenses'
+import { fetchVendors, vendorLabel, type Vendor, type PropertyRow } from '../lib/finance'
 
 type Props = {
   organizationId: string
   /** Admins can set the per-mile rate; the hint about it says where. */
   isAdmin: boolean
+  year: number
+  properties: PropertyRow[]
 }
-
-type PropertyOption = { id: string; name: string }
 
 function today(): string {
   // Local date, not UTC: a bill paid at 9pm is paid today, not tomorrow.
@@ -24,28 +25,25 @@ function today(): string {
 }
 
 /**
- * The expense log: what the properties cost to run this year, by tax
+ * The expense log: what the properties cost to run in a year, by tax
  * category.
  *
  * The totals are in Schedule E order because that is the form they end up
  * on. Costs logged on repair jobs are listed too, so repairs never have to
  * be typed in twice; they are changed on the job, not here.
  */
-export function Expenses({ organizationId, isAdmin }: Props) {
-  const thisYear = new Date().getFullYear()
-  const [year, setYear] = useState(thisYear)
+export function Expenses({ organizationId, isAdmin, year, properties }: Props) {
   const [propertyId, setPropertyId] = useState<string>('')
-  const [properties, setProperties] = useState<PropertyOption[]>([])
   const [lines, setLines] = useState<ExpenseLine[] | null>(null)
+  const [vendors, setVendors] = useState<Vendor[]>([])
   const [mileageRate, setMileageRate] = useState<number | null>(null)
-  const [adding, setAdding] = useState(false)
+  // null = no form; 'new' = adding; a record = editing that expense.
+  const [editing, setEditing] = useState<'new' | ExpenseRecord | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase?.from('properties').select('id, name')
-      .eq('organization_id', organizationId).order('name')
-      .then(({ data }) => setProperties((data ?? []) as PropertyOption[]))
     fetchMileageRate(organizationId).then(setMileageRate).catch(() => setMileageRate(null))
+    fetchVendors(organizationId).then(setVendors).catch(() => setVendors([]))
   }, [organizationId])
 
   function load() {
@@ -57,36 +55,42 @@ export function Expenses({ organizationId, isAdmin }: Props) {
 
   useEffect(load, [organizationId, year, propertyId])
 
+  async function startEdit(id: string) {
+    try {
+      setEditing(await fetchExpense(id))
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch (e) {
+      setError(errorMessage(e))
+    }
+  }
+
   const total = (lines ?? []).reduce((s, l) => s + l.amount, 0)
   const fromJobs = (lines ?? []).filter((l) => l.source === 'job')
     .reduce((s, l) => s + l.amount, 0)
   const byCategory = totalsByCategory(lines ?? [])
-  const years = Array.from({ length: 6 }, (_, i) => thisYear - i)
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Expenses</h2>
-        {!adding && (
-          <button className="link" onClick={() => setAdding(true)}>+ Add expense</button>
-        )}
-      </div>
-
-      {adding && (
-        <AddExpenseForm
+      {editing ? (
+        <ExpenseForm
+          key={editing === 'new' ? 'new' : editing.id}
           organizationId={organizationId}
           properties={properties}
+          vendors={vendors}
+          existing={editing === 'new' ? null : editing}
           onDone={(saved) => {
-            setAdding(false)
+            setEditing(null)
             if (saved) load()
           }}
         />
+      ) : (
+        <button className="primary" onClick={() => setEditing('new')}
+          style={{ marginBottom: '1rem' }}>
+          + Add expense
+        </button>
       )}
 
-      <div className="filter-row" style={{ marginTop: adding ? '1.5rem' : 0 }}>
-        <select aria-label="Year" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-          {years.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
+      <div className="filter-row" style={{ marginTop: editing ? '1.5rem' : 0 }}>
         <select aria-label="Property" value={propertyId}
           onChange={(e) => setPropertyId(e.target.value)}>
           <option value="">All properties</option>
@@ -138,8 +142,7 @@ export function Expenses({ organizationId, isAdmin }: Props) {
             {byCategory.length > 0 && (
               <p className="muted" style={{ fontSize: '0.8rem', marginBottom: 0 }}>
                 Line numbers are Schedule E, where rental expenses go on a tax
-                return. Depreciation isn't included. Check the figures with
-                your accountant.
+                return. Depreciation is on the Taxes view.
               </p>
             )}
           </div>
@@ -165,7 +168,7 @@ export function Expenses({ organizationId, isAdmin }: Props) {
             <div className="card-list">
               {lines.map((l) => (
                 <ExpenseRow key={`${l.source}-${l.id}`} line={l} onDeleted={load}
-                  onError={setError} />
+                  onEdit={() => startEdit(l.id)} onError={setError} />
               ))}
             </div>
           )}
@@ -176,8 +179,13 @@ export function Expenses({ organizationId, isAdmin }: Props) {
 }
 
 function ExpenseRow({
-  line, onDeleted, onError,
-}: { line: ExpenseLine; onDeleted: () => void; onError: (m: string) => void }) {
+  line, onDeleted, onEdit, onError,
+}: {
+  line: ExpenseLine
+  onDeleted: () => void
+  onEdit: () => void
+  onError: (m: string) => void
+}) {
   const [busy, setBusy] = useState(false)
   const info = categoryInfo(line.category)
 
@@ -224,10 +232,11 @@ function ExpenseRow({
           From a repair job — change it on the job.
         </div>
       ) : (
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.25rem' }}>
+        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
           {line.receipt_path
             ? <button className="link" onClick={openReceipt}>View receipt</button>
             : <span className="muted" style={{ fontSize: '0.85rem' }}>No receipt</span>}
+          <button className="link" onClick={onEdit} disabled={busy}>Edit</button>
           <button className="link" onClick={remove} disabled={busy}
             style={{ color: 'var(--danger)' }}>
             {busy ? 'Deleting…' : 'Delete'}
@@ -238,21 +247,26 @@ function ExpenseRow({
   )
 }
 
-function AddExpenseForm({
-  organizationId, properties, onDone,
+function ExpenseForm({
+  organizationId, properties, vendors, existing, onDone,
 }: {
   organizationId: string
-  properties: PropertyOption[]
+  properties: PropertyRow[]
+  vendors: Vendor[]
+  existing: ExpenseRecord | null
   onDone: (saved: boolean) => void
 }) {
-  const [spentOn, setSpentOn] = useState(today())
-  const [amount, setAmount] = useState('')
-  const [category, setCategory] = useState<ExpenseCategory>('repairs')
+  const [spentOn, setSpentOn] = useState(existing?.spent_on ?? today())
+  const [amount, setAmount] = useState(existing ? String(existing.amount) : '')
+  const [category, setCategory] = useState<ExpenseCategory>(existing?.category ?? 'repairs')
   // '' = shared across all properties. With one property there is nothing
   // to choose, so it is picked for them.
-  const [propertyId, setPropertyId] = useState(properties.length === 1 ? properties[0].id : '')
-  const [payee, setPayee] = useState('')
-  const [description, setDescription] = useState('')
+  const [propertyId, setPropertyId] = useState(
+    existing ? existing.property_id ?? '' : properties.length === 1 ? properties[0].id : '')
+  const [vendorId, setVendorId] = useState(existing?.vendor_id ?? '')
+  const [payee, setPayee] = useState(existing?.payee ?? '')
+  const [paidBy, setPaidBy] = useState(existing?.paid_by ?? '')
+  const [description, setDescription] = useState(existing?.description ?? '')
   const [receipt, setReceipt] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -263,8 +277,8 @@ function AddExpenseForm({
     try {
       // Receipt first: if it fails nothing is saved, rather than leaving
       // an expense that looks documented and isn't.
-      const receiptPath = receipt ? await uploadExpenseReceipt(organizationId, receipt) : null
-      await addExpense({
+      const uploaded = receipt ? await uploadExpenseReceipt(organizationId, receipt) : null
+      await saveExpense({
         organizationId,
         propertyId: propertyId || null,
         category,
@@ -272,8 +286,12 @@ function AddExpenseForm({
         amount: Number(amount),
         payee: payee.trim() || null,
         description: description.trim() || null,
-        receiptPath,
-      })
+        receiptPath: uploaded ?? existing?.receipt_path ?? null,
+        vendorId: vendorId || null,
+        paidBy: paidBy || null,
+      }, existing?.id)
+      // A replaced receipt's old file is no longer referenced.
+      if (uploaded && existing?.receipt_path) await removeExpenseReceipt(existing.receipt_path)
       onDone(true)
     } catch (err) {
       setError(errorMessage(err))
@@ -286,7 +304,7 @@ function AddExpenseForm({
   return (
     <form onSubmit={submit} className="card-list" style={{ marginTop: '0.5rem' }}>
       <div>
-        <h3 style={{ marginTop: 0 }}>Add an expense</h3>
+        <h3 style={{ marginTop: 0 }}>{existing ? 'Edit expense' : 'Add an expense'}</h3>
 
         <div className="field">
           <label htmlFor="x-amount">Amount ($)</label>
@@ -328,11 +346,37 @@ function AddExpenseForm({
           <span className="muted">The day the money left, not the date on the bill.</span>
         </div>
 
+        {vendors.length > 0 && (
+          <div className="field">
+            <label htmlFor="x-vendor">Vendor (optional)</label>
+            <select id="x-vendor" value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
+              <option value="">None</option>
+              {vendors.map((v) => <option key={v.id} value={v.id}>{vendorLabel(v)}</option>)}
+            </select>
+            <span className="muted">Pick one for contractors, so their 1099 total adds up.</span>
+          </div>
+        )}
+
+        {!vendorId && (
+          <div className="field">
+            <label htmlFor="x-payee">Paid to (optional)</label>
+            <input id="x-payee" type="text" value={payee}
+              placeholder="e.g. State Farm, Campbell County"
+              onChange={(e) => setPayee(e.target.value)} />
+          </div>
+        )}
+
         <div className="field">
-          <label htmlFor="x-payee">Paid to (optional)</label>
-          <input id="x-payee" type="text" value={payee}
-            placeholder="e.g. State Farm, Campbell County"
-            onChange={(e) => setPayee(e.target.value)} />
+          <label htmlFor="x-paidby">Paid by (optional)</label>
+          <select id="x-paidby" value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
+            <option value="">Not recorded</option>
+            {PAID_BY.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
+          {paidBy === 'card' && vendorId && (
+            <span className="muted">
+              Card payments don't count toward a 1099 — the card company reports them.
+            </span>
+          )}
         </div>
 
         <div className="field">
@@ -342,7 +386,9 @@ function AddExpenseForm({
         </div>
 
         <div className="field">
-          <label htmlFor="x-receipt">Receipt or bill (optional)</label>
+          <label htmlFor="x-receipt">
+            {existing?.receipt_path ? 'Replace receipt (optional)' : 'Receipt or bill (optional)'}
+          </label>
           <input id="x-receipt" type="file"
             // No `capture`, so a bill already saved as a photo or PDF can
             // be picked as well as photographed.
@@ -353,7 +399,7 @@ function AddExpenseForm({
 
         {error && <p className="error-text">{error}</p>}
         <button className="primary" type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Save expense'}
+          {busy ? 'Saving…' : existing ? 'Save changes' : 'Save expense'}
         </button>
         <button className="link" type="button" onClick={() => onDone(false)}
           style={{ marginTop: '0.5rem' }} disabled={busy}>

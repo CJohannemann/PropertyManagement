@@ -504,3 +504,14 @@ button.link {
 .stat.is-tappable:focus-visible {
   background: var(--bg);
 }
+
+/* ------------------------------------------------------------ print -- */
+
+/* The tax summary is printed for an accountant: page content only, no
+ * navigation, buttons or editing forms. */
+@media print {
+  .app-nav, .app-header, .no-print, .seg, header { display: none !important; }
+  .app-shell:has(.app-nav) .app-main { padding-bottom: 0; }
+  body { background: #fff; color: #000; }
+  .card-list > div { break-inside: avoid; }
+}

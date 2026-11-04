@@ -66,6 +66,8 @@ export type ExpenseLine = {
   amount: number
   receipt_path: string | null
   job_id: string | null
+  vendor_id: string | null
+  paid_by: string | null
 }
 
 export async function fetchExpenseLines(
@@ -97,7 +99,16 @@ export function totalsByCategory(lines: ExpenseLine[]): CategoryTotal[] {
     .sort((a, b) => a.line - b.line)
 }
 
-export async function addExpense(input: {
+/** How a bill was paid. Card matters: the card company reports it, not you. */
+export const PAID_BY = [
+  { value: 'check', label: 'Check' },
+  { value: 'bank_transfer', label: 'Bank transfer' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'card', label: 'Credit or debit card' },
+  { value: 'other', label: 'Other' },
+] as const
+
+export type ExpenseInput = {
   organizationId: string
   propertyId: string | null
   category: ExpenseCategory
@@ -106,11 +117,38 @@ export async function addExpense(input: {
   payee: string | null
   description: string | null
   receiptPath: string | null
-}): Promise<void> {
+  vendorId: string | null
+  paidBy: string | null
+}
+
+/** The stored row, for filling in the edit form exactly as entered. */
+export type ExpenseRecord = {
+  id: string
+  property_id: string | null
+  category: ExpenseCategory
+  spent_on: string
+  amount: number
+  payee: string | null
+  description: string | null
+  receipt_path: string | null
+  vendor_id: string | null
+  paid_by: string | null
+}
+
+export async function fetchExpense(id: string): Promise<ExpenseRecord> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { data, error } = await supabase.from('expenses')
+    .select('id, property_id, category, spent_on, amount, payee, description, receipt_path, vendor_id, paid_by')
+    .eq('id', id).single()
+  if (error) throw error
+  return { ...(data as ExpenseRecord), amount: Number((data as ExpenseRecord).amount) }
+}
+
+/** Adds an expense, or updates it when an id is given. */
+export async function saveExpense(input: ExpenseInput, id?: string): Promise<void> {
   if (!supabase) throw new Error('Supabase not configured')
   // recorded_by is filled in by the database from who is signed in.
-  const { error } = await supabase.from('expenses').insert({
-    organization_id: input.organizationId,
+  const row = {
     property_id: input.propertyId,
     category: input.category,
     spent_on: input.spentOn,
@@ -118,8 +156,18 @@ export async function addExpense(input: {
     payee: input.payee,
     description: input.description,
     receipt_path: input.receiptPath,
-  })
+    vendor_id: input.vendorId,
+    paid_by: input.paidBy,
+  }
+  const { error } = id
+    ? await supabase.from('expenses').update(row).eq('id', id)
+    : await supabase.from('expenses').insert({ ...row, organization_id: input.organizationId })
   if (error) throw error
+}
+
+/** Removes a stored receipt file; a failure only leaves a stray file. */
+export async function removeExpenseReceipt(path: string): Promise<void> {
+  await supabase?.storage.from('expense-receipts').remove([path])
 }
 
 /** Deletes an expense and, best effort, its receipt file. */
