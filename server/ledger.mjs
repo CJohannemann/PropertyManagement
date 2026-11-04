@@ -96,6 +96,37 @@ export async function reversePayment(paymentIntentId, reason) {
   return { reversed: rowCount > 0 }
 }
 
+/**
+ * A partial refund: Stripe sends charge.refunded for those too, and
+ * reversing the whole payment for a $50 refund on $1,200 of rent would put
+ * the full rent back to owed. Records how much has gone back instead; the
+ * database takes that, and only that, off the charge (see
+ * apply_partial_refund in 038_books_fixes.sql).
+ *
+ * `refundedCents` is Stripe's charge.amount_refunded — cumulative — so a
+ * redelivered or out-of-order event can only ever raise the figure, never
+ * lower it or count a refund twice.
+ */
+export async function recordPartialRefund(paymentIntentId, refundedCents) {
+  if (!Number.isInteger(refundedCents) || refundedCents <= 0) {
+    throw new Error(`refund for ${paymentIntentId} has no amount`)
+  }
+  const { rowCount } = await query(
+    `update payments
+        set refunded_amount = $2::numeric / 100
+      where stripe_payment_intent_id = $1
+        and status = 'succeeded'
+        and refunded_amount < $2::numeric / 100`,
+    [paymentIntentId, refundedCents],
+  )
+  console.log(
+    rowCount > 0
+      ? `[ledger] ${paymentIntentId} partly refunded (${(refundedCents / 100).toFixed(2)} so far)`
+      : `[ledger] ${paymentIntentId} refund already recorded, not settled, or unknown`,
+  )
+  return { recorded: rowCount > 0 }
+}
+
 /** Caches what Stripe says about a landlord's connected account. */
 export async function updateConnectState(account) {
   await query(

@@ -84,7 +84,7 @@ export function Finances({ organizationId, isAdmin }: Props) {
             <Reports organizationId={organizationId} year={year} properties={properties} />
           )}
           {view === 'taxes' && (
-            <TaxPackage organizationId={organizationId} year={year} properties={properties} />
+            <TaxPackage organizationId={organizationId} year={year} properties={properties} isAdmin={isAdmin} />
           )}
           {view === 'vendors' && <Vendors organizationId={organizationId} year={year} />}
         </>

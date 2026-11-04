@@ -27,6 +27,7 @@ const USER = '00000000-0000-0000-0000-0000000000b1'
 const MEMBER = '00000000-0000-0000-0000-0000000000c1'
 const LEASE = '00000000-0000-0000-0000-0000000000d1'
 const CHARGE = '00000000-0000-0000-0000-0000000000e1'
+const CHARGE2 = '00000000-0000-0000-0000-0000000000e2'
 
 function seedFixture() {
   psql(`
@@ -43,13 +44,15 @@ function seedFixture() {
       values ('${LEASE}', '${MEMBER}', true);
     insert into rent_charges (id, lease_id, charge_type, due_date, amount)
       values ('${CHARGE}', '${LEASE}', 'rent', '2026-02-01', 1200);
+    insert into rent_charges (id, lease_id, charge_type, due_date, amount)
+      values ('${CHARGE2}', '${LEASE}', 'rent', '2026-03-01', 1200);
   `)
 }
 
 /** What the ledger currently says about the test charge. */
-function chargeState() {
+function chargeState(id = CHARGE) {
   const [paid, status] = psql(
-    `select amount_paid, status from rent_charges where id = '${CHARGE}';`,
+    `select amount_paid, status from rent_charges where id = '${id}';`,
   ).trim().split('|')
   return { paid: Number(paid), status }
 }
@@ -65,12 +68,12 @@ function check(label, actual, expected) {
 }
 
 /** A Stripe PaymentIntent as our own /api/payments/intent would have made it. */
-function intent(id, rentCents, feeCents) {
+function intent(id, rentCents, feeCents, charge = CHARGE) {
   return {
     id,
     amount: rentCents + feeCents,
     metadata: {
-      rent_charge_id: CHARGE,
+      rent_charge_id: charge,
       lease_id: LEASE,
       tenant_member_id: MEMBER,
       rent_amount_cents: String(rentCents),
@@ -93,7 +96,7 @@ async function main() {
   process.env.STRIPE_SECRET_KEY = 'sk_test_dummy'
   process.env.STRIPE_WEBHOOK_SECRET = 'whsec_dummy'
 
-  const { upsertPayment, reversePayment } = await import('../ledger.mjs')
+  const { upsertPayment, reversePayment, recordPartialRefund } = await import('../ledger.mjs')
   const { close } = await import('../db.mjs')
 
   const pi = intent('pi_test_1', 120000, 600)
@@ -123,6 +126,24 @@ async function main() {
 
   await upsertPayment(pi, 'succeeded', { chargeId: 'ch_1' })
   check('and a redelivered success cannot resurrect it', chargeState(), { paid: 0, status: 'pending' })
+
+  console.log('\npartial refunds')
+  const march = intent('pi_test_3', 120000, 500, CHARGE2)
+  await upsertPayment(march, 'succeeded', { chargeId: 'ch_3' })
+  check('march rent settles', chargeState(CHARGE2), { paid: 1200, status: 'paid' })
+  await recordPartialRefund('pi_test_3', 5000)
+  check('a $50 refund takes $50 off, not the whole payment',
+    chargeState(CHARGE2), { paid: 1150, status: 'partial' })
+  await recordPartialRefund('pi_test_3', 5000)
+  check('the same refund redelivered changes nothing', chargeState(CHARGE2), { paid: 1150, status: 'partial' })
+  await recordPartialRefund('pi_test_3', 20000)
+  check('a second refund (Stripe reports the running total) takes only the extra',
+    chargeState(CHARGE2), { paid: 1000, status: 'partial' })
+  await recordPartialRefund('pi_test_3', 5000)
+  check('an older event arriving late cannot shrink the refund', chargeState(CHARGE2), { paid: 1000, status: 'partial' })
+  await reversePayment('pi_test_3', 'refunded')
+  check('refunding the rest leaves nothing paid, not less than nothing',
+    chargeState(CHARGE2), { paid: 0, status: 'pending' })
 
   console.log('\na split that does not add up')
   const tampered = intent('pi_test_2', 120000, 600)

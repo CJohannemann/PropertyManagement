@@ -39,7 +39,7 @@ alter table leases drop constraint if exists leases_end_reason_check;
 alter table leases add constraint leases_end_reason_check
   check (end_reason is null or end_reason in (
     'term_ended', 'moved_out_early', 'mutual_agreement', 'eviction',
-    'abandoned', 'other'));
+    'abandoned', 'property_sold', 'other'));
 
 -- A dated record against a lease (part 2), created here because ending a
 -- lease writes the first entry.
@@ -104,7 +104,7 @@ begin
   end if;
 
   if reason is null or reason not in ('term_ended', 'moved_out_early', 'mutual_agreement',
-                                      'eviction', 'abandoned', 'other') then
+                                      'eviction', 'abandoned', 'property_sold', 'other') then
     raise exception 'unknown reason';
   end if;
 

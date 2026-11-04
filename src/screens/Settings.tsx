@@ -7,7 +7,10 @@ import {
 import { useThemePreference, THEME_CHOICES } from '../lib/theme'
 import { LeaseTemplates } from './LeaseTemplates'
 import { InviteMember } from './InviteMember'
-import { fetchMileageRate, setMileageRate } from '../lib/expenses'
+import {
+  fetchMileageRates, saveMileageRate, deleteMileageRate, fetchTimezone, saveTimezone,
+  fetchClosedYears, confirmClosedYearChange, US_TIME_ZONES, type MileageRate,
+} from '../lib/finance'
 
 type Props = {
   organizationId: string
@@ -144,7 +147,8 @@ export function Settings({ organizationId, canInviteMembers, isAdmin = false, on
         </>
       )}
 
-      {isAdmin && <MileageRate organizationId={organizationId} />}
+      {isAdmin && <MileageRates organizationId={organizationId} />}
+      {isAdmin && <TimeZone organizationId={organizationId} />}
 
       <h3 style={{ marginTop: '2.5rem' }}>Documents</h3>
       <div className="card-list">
@@ -338,57 +342,131 @@ function TechnicianAccessEditor({
 }
 
 /**
- * What a mile of repair-job driving costs. Without it, mileage is logged
- * but counted as nothing in job totals and on the Expenses screen.
+ * What a mile of repair-job driving costs, per year.
+ *
+ * Per year because the IRS standard rate changes every January, and one
+ * rate for all time meant setting next year's rewrote the years already
+ * filed. A year with no rate of its own uses the latest earlier one.
  */
-function MileageRate({ organizationId }: { organizationId: string }) {
+function MileageRates({ organizationId }: { organizationId: string }) {
+  const thisYear = new Date().getFullYear()
+  const [rates, setRates] = useState<MileageRate[] | null>(null)
+  const [closed, setClosed] = useState<number[]>([])
+  const [year, setYear] = useState(String(thisYear))
   const [rate, setRate] = useState('')
-  const [saved, setSaved] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchMileageRate(organizationId)
-      .then((r) => { const v = r == null ? '' : String(r); setRate(v); setSaved(v) })
-      .catch((e) => setError(errorMessage(e)))
-  }, [organizationId])
+  function load() {
+    fetchMileageRates(organizationId).then(setRates).catch((e) => setError(errorMessage(e)))
+    fetchClosedYears(organizationId).then((c) => setClosed(c.map((x) => x.year))).catch(() => setClosed([]))
+  }
+  useEffect(load, [organizationId])
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
+    const y = Number(year)
+    if (closed.includes(y) && !confirmClosedYearChange(y)) return
     setBusy(true); setError(null)
     try {
-      await setMileageRate(organizationId, rate.trim() === '' ? null : Number(rate))
-      setSaved(rate)
+      await saveMileageRate(organizationId, y, Number(rate))
+      setRate('')
+      load()
     } catch (err) {
       setError(errorMessage(err))
     }
     setBusy(false)
   }
 
+  async function remove(y: number) {
+    if (closed.includes(y) ? !confirmClosedYearChange(y) : !window.confirm(`Remove the ${y} rate?`)) return
+    try { await deleteMileageRate(organizationId, y); load() } catch (err) { setError(errorMessage(err)) }
+  }
+
   return (
     <>
       <h3 style={{ marginTop: '2.5rem' }}>Mileage</h3>
-      <form onSubmit={save} className="card-list">
+      <div className="card-list">
         <div>
-          <div className="field">
-            <label htmlFor="mileage-rate">Cost per mile ($)</label>
-            <input id="mileage-rate" type="number" min="0" max="10" step="0.001"
-              inputMode="decimal" placeholder="e.g. 0.70"
-              value={rate} onChange={(e) => setRate(e.target.value)} />
-            {/* The IRS standard rate changes every year, so it is named
-                rather than filled in. */}
-            <span className="muted">
-              Turns miles logged on repair jobs into a cost. Most landlords use
-              the IRS standard mileage rate for the year. Leave blank to log
-              miles without costing them.
-            </span>
-          </div>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Turns miles logged on repair jobs into a cost. Most landlords use the
+            IRS standard mileage rate, which changes every year. A year without
+            its own rate uses the latest earlier one.
+          </p>
+          {rates && rates.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1rem' }}>
+              <tbody>
+                {rates.map((r) => (
+                  <tr key={r.year} style={{ borderTop: '1px solid var(--line)' }}>
+                    <td style={{ padding: '0.35rem 0' }}>{r.year}{closed.includes(r.year) ? ' · closed' : ''}</td>
+                    <td style={{ textAlign: 'right' }}>${r.rate.toFixed(3)} a mile</td>
+                    <td style={{ textAlign: 'right', width: '2rem' }}>
+                      <button className="link" aria-label={`Remove the ${r.year} rate`}
+                        style={{ color: 'var(--danger)' }} onClick={() => remove(r.year)}>×</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {rates?.length === 0 && (
+            <p style={{ marginTop: 0 }}>No rate yet: mileage is logged but not costed.</p>
+          )}
+          <form onSubmit={save} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div className="field" style={{ flex: '1 1 6rem', margin: 0 }}>
+              <label htmlFor="mr-year">Year</label>
+              <input id="mr-year" type="number" min="2000" max="2100" required
+                value={year} onChange={(e) => setYear(e.target.value)} />
+            </div>
+            <div className="field" style={{ flex: '1 1 7rem', margin: 0 }}>
+              <label htmlFor="mr-rate">$ per mile</label>
+              <input id="mr-rate" type="number" min="0" max="10" step="0.001" required
+                inputMode="decimal" placeholder="0.70" value={rate} onChange={(e) => setRate(e.target.value)} />
+            </div>
+            <button className="primary" type="submit" disabled={busy} style={{ flex: '1 1 6rem' }}>
+              {busy ? 'Saving…' : 'Set rate'}
+            </button>
+          </form>
           {error && <p className="error-text">{error}</p>}
-          <button className="primary" type="submit" disabled={busy || rate === saved}>
-            {busy ? 'Saving…' : rate === saved && saved !== null ? 'Saved' : 'Save'}
-          </button>
         </div>
-      </form>
+      </div>
+    </>
+  )
+}
+
+/**
+ * Where the landlord is, so a payment or repair logged late on December 31
+ * lands in the year it happened rather than the next one.
+ */
+function TimeZone({ organizationId }: { organizationId: string }) {
+  const [zone, setZone] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    fetchTimezone(organizationId).then(setZone).catch((e) => setError(errorMessage(e)))
+  }, [organizationId])
+
+  if (zone === null) return null
+  return (
+    <>
+      <h3 style={{ marginTop: '2.5rem' }}>Time zone</h3>
+      <div className="field">
+        <label htmlFor="tz">Your books follow this time zone</label>
+        <select id="tz" value={zone} onChange={async (e) => {
+          const next = e.target.value
+          setZone(next); setSaved(false); setError(null)
+          try { await saveTimezone(organizationId, next); setSaved(true) } catch (err) { setError(errorMessage(err)) }
+        }}>
+          {!US_TIME_ZONES.some((z) => z.value === zone) && <option value={zone}>{zone}</option>}
+          {US_TIME_ZONES.map((z) => <option key={z.value} value={z.value}>{z.label}</option>)}
+        </select>
+        <span className="muted">
+          Decides which day — and so which tax year — a late-evening payment or repair falls on.
+          {saved && ' Saved.'}
+        </span>
+      </div>
+      {error && <p className="error-text">{error}</p>}
     </>
   )
 }

@@ -102,7 +102,8 @@ export function Reports({ organizationId, year, properties }: Props) {
       : null
     const noi = inc - opex
     return { p, inc, opex, interest, noi, cashFlow: noi - interest, invested }
-  })
+  // A building sold before this year, with nothing in it, is history only.
+  }).filter((r) => !(r.p.sold_on && r.p.sold_on < periodStart && r.inc === 0 && r.opex === 0 && r.interest === 0))
   const shared = expenses.filter((e) => !e.property_id)
   const sharedOpex = shared.filter((e) => !FINANCING.has(e.category)).reduce((s, e) => s + e.amount, 0)
   const sharedInterest = shared.filter((e) => FINANCING.has(e.category)).reduce((s, e) => s + e.amount, 0)
@@ -152,30 +153,45 @@ export function Reports({ organizationId, year, properties }: Props) {
     .sort((a, b) => b.avg - a.avg)
 
   // ------------------------------------------------- occupancy & roll --
-  const totalUnits = properties.reduce((s, p) => s + p.unitCount, 0)
+  // Each property counts until it was sold: a building sold in June is
+  // measured to June, and one sold before this year not at all.
+  const ownedUntil = new Map(properties.map((p) => [
+    p.id, p.sold_on && p.sold_on < periodEnd ? p.sold_on : periodEnd,
+  ]))
+  const ownedDays = (propertyId: string) => {
+    const end = ownedUntil.get(propertyId) ?? periodEnd
+    return end < periodStart ? 0 : days(periodStart, end) + 1
+  }
+  const ownedUnits = properties.filter((p) => ownedDays(p.id) > 0)
+  const totalUnitDays = ownedUnits.reduce((s, p) => s + p.unitCount * ownedDays(p.id), 0)
   let leasedDays = 0
   let lostRent = 0
   const leasesByUnit = new Map<string, LeaseRow[]>()
   for (const l of leases) {
+    if (!l.units || ownedDays(l.units.property_id) === 0) continue
     if (!leasesByUnit.has(l.unit_id)) leasesByUnit.set(l.unit_id, [])
     leasesByUnit.get(l.unit_id)!.push(l)
   }
   for (const [, ls] of leasesByUnit) {
+    const propertyId = ls[0].units!.property_id
+    const unitEnd = ownedUntil.get(propertyId) ?? periodEnd
+    const unitDays = ownedDays(propertyId)
     let covered = 0
     for (const l of ls) {
-      const end = (l.status === 'ended' ? l.ended_on ?? l.end_date : l.end_date) ?? periodEnd
+      const end = (l.status === 'ended' ? l.ended_on ?? l.end_date : l.end_date) ?? unitEnd
       const s = l.start_date > periodStart ? l.start_date : periodStart
-      const e = end < periodEnd ? end : periodEnd
+      const e = end < unitEnd ? end : unitEnd
       if (e >= s) covered += days(s, e) + 1
     }
-    covered = Math.min(covered, periodDays)
+    covered = Math.min(covered, unitDays)
     leasedDays += covered
     // Lost rent at the unit's most recent rent, for the days it sat empty.
     const latest = [...ls].sort((a, b) => b.start_date.localeCompare(a.start_date))[0]
-    lostRent += (periodDays - covered) * latest.rent_amount * 12 / 365
+    lostRent += (unitDays - covered) * latest.rent_amount * 12 / 365
   }
+  const totalUnits = ownedUnits.reduce((s, p) => s + p.unitCount, 0)
   const neverLeased = Math.max(0, totalUnits - leasesByUnit.size)
-  const occupancy = totalUnits > 0 ? leasedDays / (totalUnits * periodDays) : null
+  const occupancy = totalUnitDays > 0 ? leasedDays / totalUnitDays : null
 
   const active = leases.filter((l) => l.status === 'active')
     .sort((a, b) => (propertyName(properties, a) + (a.units?.label ?? ''))
@@ -192,7 +208,7 @@ export function Reports({ organizationId, year, properties }: Props) {
     const turnaround = done.map((j) => days((j.maintenance_requests?.created_at ?? j.created_at).slice(0, 10), j.completed_date!))
     const avg = turnaround.length ? turnaround.reduce((s, d) => s + d, 0) / turnaround.length : null
     return { p, spend, jobs: done.length, avg, perUnit: p.unitCount ? spend / p.unitCount : null }
-  })
+  }).filter((r) => !(r.p.sold_on && r.p.sold_on < periodStart && r.spend === 0 && r.jobs === 0))
 
   const pct = (n: number) => `${Math.round(n * 100)}%`
 

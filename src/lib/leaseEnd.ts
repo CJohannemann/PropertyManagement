@@ -11,6 +11,7 @@ export const END_REASONS = [
   { value: 'mutual_agreement', label: 'Ended by mutual agreement' },
   { value: 'eviction', label: 'Eviction' },
   { value: 'abandoned', label: 'Unit abandoned' },
+  { value: 'property_sold', label: 'Property sold' },
   { value: 'other', label: 'Other' },
 ] as const
 

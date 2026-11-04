@@ -332,6 +332,13 @@ async function main() {
     check('but credits nothing further', paid(), '1200.00')
 
     w = await webhook({
+      id: 'evt_refund_part', type: 'charge.refunded',
+      data: { object: { payment_intent: 'pi_hook', amount: 120000, amount_refunded: 5000, refunded: false } },
+    })
+    check('a partial refund is accepted', w.status, 200)
+    check('and takes only the refund off the rent, not the whole payment', paid(), '1150.00')
+
+    w = await webhook({
       id: 'evt_2', type: 'charge.dispute.created',
       data: { object: { payment_intent: 'pi_hook', reason: 'insufficient_funds' } },
     })

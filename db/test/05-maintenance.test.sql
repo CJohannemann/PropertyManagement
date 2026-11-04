@@ -9,7 +9,8 @@ insert into auth.users (id, email) values
 insert into org_creation_allowlist (email) values ('owner@example.com');
 select set_config('request.jwt.uid', '11111111-1111-1111-1111-111111111111', false);
 select create_organization('Test Org') as org \gset
-update organizations set mileage_rate = 0.70 where id = :'org';
+-- Per-year rates (038); one from 2000 covers every year these entries fall in.
+insert into mileage_rates (organization_id, year, rate) values (:'org', 2000, 0.70);
 
 insert into properties (organization_id, name, address_line1, city, state, zip)
 values (:'org', 'H', '1 St', 'Covington', 'KY', '41051') returning id as prop \gset

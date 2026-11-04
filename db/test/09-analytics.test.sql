@@ -119,7 +119,8 @@ select assert_rejected(
 -- to prove they are refused.
 select set_config('request.jwt.uid', 'aaaaaaaa-0000-0000-0000-00000000a001', false);
 
-update organizations set mileage_rate = 0.70 where id = :'org_a';
+-- Per-year rates (038); one from 2000 covers every year these entries fall in.
+insert into mileage_rates (organization_id, year, rate) values (:'org_a', 2000, 0.70);
 
 insert into maintenance_jobs (organization_id, property_id, unit_id, status)
 values (:'org_a', :'prop_a', :'unit_a', 'completed') returning id as job_a \gset

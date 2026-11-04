@@ -164,6 +164,8 @@ export type PropertyFinancials = {
   closing_costs: number | null
   land_value: number | null
   placed_in_service: string | null
+  sale_price?: number | null
+  selling_costs?: number | null
 }
 
 export type Improvement = {
@@ -187,6 +189,8 @@ export async function fetchFinancials(): Promise<PropertyFinancials[]> {
     purchase_price: num(f.purchase_price),
     closing_costs: num(f.closing_costs),
     land_value: num(f.land_value),
+    sale_price: num(f.sale_price),
+    selling_costs: num(f.selling_costs),
   }))
 }
 
@@ -228,16 +232,27 @@ export const RECOVERY_CHOICES: { value: RecoveryYears; label: string }[] = [
 
 // ------------------------------------------------------------- shared --
 
-export type PropertyRow = { id: string; name: string; purchase_date: string | null; unitCount: number }
+export type PropertyRow = {
+  id: string
+  name: string
+  purchase_date: string | null
+  /** Set once sold (038). History stays; it leaves occupancy and new leases. */
+  sold_on: string | null
+  unitCount: number
+}
 
 export async function fetchPropertyRows(organizationId: string): Promise<PropertyRow[]> {
   if (!supabase) return []
   const { data, error } = await supabase.from('properties')
-    .select('id, name, purchase_date, units(id)')
+    .select('id, name, purchase_date, sold_on, units(id)')
     .eq('organization_id', organizationId).order('name')
   if (error) throw error
-  return ((data ?? []) as { id: string; name: string; purchase_date: string | null; units: { id: string }[] }[])
-    .map((p) => ({ id: p.id, name: p.name, purchase_date: p.purchase_date, unitCount: p.units?.length ?? 0 }))
+  return ((data ?? []) as {
+    id: string; name: string; purchase_date: string | null; sold_on: string | null; units: { id: string }[]
+  }[]).map((p) => ({
+    id: p.id, name: p.name, purchase_date: p.purchase_date, sold_on: p.sold_on ?? null,
+    unitCount: p.units?.length ?? 0,
+  }))
 }
 
 /** Triggers a browser download of bytes or text. */
@@ -251,4 +266,129 @@ export function downloadFile(name: string, data: Uint8Array | string, type: stri
   a.click()
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
+
+// ------------------------------------------------------------ selling --
+
+export async function markPropertySold(
+  propertyId: string, soldOn: string, salePrice: number, sellingCosts: number,
+): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { error } = await supabase.rpc('mark_property_sold', {
+    target: propertyId, sold: soldOn, price: salePrice, costs: sellingCosts,
+  })
+  if (error) throw error
+}
+
+export async function unmarkPropertySold(propertyId: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { error } = await supabase.rpc('unmark_property_sold', { target: propertyId })
+  if (error) throw error
+}
+
+// ------------------------------------------------------- closed years --
+
+export type ClosedYear = { year: number; closed_at: string; closed_by: string | null }
+export type YearChange = { id: string; year: number; changed_at: string; changed_by: string | null; summary: string }
+
+export async function fetchClosedYears(organizationId: string): Promise<ClosedYear[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase.from('closed_years')
+    .select('year, closed_at, closed_by').eq('organization_id', organizationId)
+  if (error) throw error
+  return (data ?? []) as ClosedYear[]
+}
+
+/** Admin only (RLS). Who closed it is filled in by the database. */
+export async function closeYear(organizationId: string, year: number): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { error } = await supabase.from('closed_years').insert({ organization_id: organizationId, year })
+  if (error) throw error
+}
+
+export async function reopenYear(organizationId: string, year: number): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { error } = await supabase.from('closed_years').delete()
+    .eq('organization_id', organizationId).eq('year', year)
+  if (error) throw error
+}
+
+export async function fetchYearChanges(organizationId: string, year: number): Promise<YearChange[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase.from('year_change_log')
+    .select('id, year, changed_at, changed_by, summary')
+    .eq('organization_id', organizationId).eq('year', year)
+    .order('changed_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as YearChange[]
+}
+
+/**
+ * Asks an admin to confirm a change to a closed year. Property managers
+ * aren't asked: the database refuses them, and says why.
+ */
+export function confirmClosedYearChange(year: number): boolean {
+  return window.confirm(
+    `The books for ${year} are closed. Change them anyway?\n\n`
+    + 'The change will be recorded in the list of changes made after closing, '
+    + 'so your accountant can see what moved.',
+  )
+}
+
+// ------------------------------------------------------ mileage rates --
+
+export type MileageRate = { year: number; rate: number }
+
+export async function fetchMileageRates(organizationId: string): Promise<MileageRate[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase.from('mileage_rates').select('year, rate')
+    .eq('organization_id', organizationId).order('year', { ascending: false })
+  if (error) throw error
+  return ((data ?? []) as MileageRate[]).map((r) => ({ year: r.year, rate: Number(r.rate) }))
+}
+
+/** The rate a year's mileage is costed at: its own, else the latest earlier one. */
+export function rateForYear(rates: MileageRate[], year: number): MileageRate | null {
+  return [...rates].sort((a, b) => b.year - a.year).find((r) => r.year <= year) ?? null
+}
+
+export async function saveMileageRate(organizationId: string, year: number, rate: number): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { error } = await supabase.from('mileage_rates')
+    .upsert({ organization_id: organizationId, year, rate })
+  if (error) throw error
+}
+
+export async function deleteMileageRate(organizationId: string, year: number): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { error } = await supabase.from('mileage_rates').delete()
+    .eq('organization_id', organizationId).eq('year', year)
+  if (error) throw error
+}
+
+// ---------------------------------------------------------- time zone --
+
+/** US zones, which is where this app's landlords are. */
+export const US_TIME_ZONES = [
+  { value: 'America/New_York', label: 'Eastern' },
+  { value: 'America/Chicago', label: 'Central' },
+  { value: 'America/Denver', label: 'Mountain' },
+  { value: 'America/Phoenix', label: 'Arizona (no daylight saving)' },
+  { value: 'America/Los_Angeles', label: 'Pacific' },
+  { value: 'America/Anchorage', label: 'Alaska' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii' },
+] as const
+
+export async function fetchTimezone(organizationId: string): Promise<string> {
+  if (!supabase) return 'America/New_York'
+  const { data, error } = await supabase.from('organizations').select('timezone')
+    .eq('id', organizationId).single()
+  if (error) throw error
+  return (data?.timezone as string) ?? 'America/New_York'
+}
+
+export async function saveTimezone(organizationId: string, timezone: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { error } = await supabase.from('organizations').update({ timezone }).eq('id', organizationId)
+  if (error) throw error
 }

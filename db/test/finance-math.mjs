@@ -14,7 +14,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  depreciationForYear, accumulatedThrough, buildingBasis,
+  depreciationForYear, accumulatedThrough, buildingBasis, saleGain,
 } from '../../src/lib/depreciation.ts'
 import { toCsv, buildZip, crc32, safeFileName } from '../../src/lib/fileExport.ts'
 
@@ -60,6 +60,35 @@ check('7-year adds up to the basis',
 check('15-year adds up to the basis',
   near(accumulatedThrough(1000, '2026-01-01', 15, 2050), 1000, 0.05), true)
 check('a bad date gives nothing rather than NaN', depreciationForYear(1000, '', 5, 2026), 0)
+
+console.log('\nselling')
+// Sold mid-June: the building gets five and a half months that year.
+check('the year of sale stops mid-month',
+  near(depreciationForYear(200000, '2021-03-15', 27.5, 2026, '2026-06-15'), 200000 / 27.5 * 5.5 / 12, 0.01), true)
+check('and nothing after it', depreciationForYear(200000, '2021-03-15', 27.5, 2027, '2026-06-15'), 0)
+check('5-year property gets half a year in the year of sale',
+  depreciationForYear(1000, '2024-07-01', 5, 2026, '2026-06-15'), 96)
+check('nothing for something bought and sold the same year',
+  depreciationForYear(1000, '2026-02-01', 5, 2026, '2026-06-15'), 0)
+// $250,000 with $50,000 land, in service March 2021, sold June 2026 for
+// $300,000 less $18,000 costs. 63 months of depreciation on $200,000.
+const sale = saleGain({
+  salePrice: 300000, sellingCosts: 18000, purchasePrice: 250000, closingCosts: 0,
+  landValue: 50000, soldOn: '2026-06-15', buildingInService: '2021-03-15', improvements: [],
+})
+const dep = Math.round(200000 / 27.5 * 63 / 12 * 100) / 100
+check('depreciation taken is 63 months of it', near(sale.depreciation, dep, 0.02), true)
+check('adjusted basis is price less depreciation (land included)', near(sale.adjustedBasis, 250000 - dep, 0.02), true)
+check('gain is what was realized less adjusted basis', near(sale.gain, 282000 - (250000 - dep), 0.02), true)
+check('the depreciation part is unrecaptured 1250 gain', near(sale.unrecaptured1250, dep, 0.02), true)
+check('the rest is capital gain', near(sale.capitalGain, 32000, 0.02), true)
+const loss = saleGain({
+  salePrice: 150000, sellingCosts: 10000, purchasePrice: 250000, closingCosts: 0,
+  landValue: 50000, soldOn: '2026-06-15', buildingInService: '2021-03-15',
+  improvements: [{ cost: 3000, inService: '2024-01-10', recoveryYears: 5 }],
+})
+check('on a loss there is no recapture', [loss.recapture1245, loss.unrecaptured1250, loss.capitalGain], [0, 0, 0])
+check('and the loss is reported as a negative gain', loss.gain < 0, true)
 
 console.log('\nspreadsheet files')
 const csv = toCsv(['Payee', 'Amount'], [['Joe, Inc', 12.5], ['Say "hi"', 1], ['=cmd()', 2], [null, -5]])

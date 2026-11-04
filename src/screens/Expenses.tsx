@@ -8,7 +8,10 @@ import {
   uploadExpenseReceipt, removeExpenseReceipt, expenseReceiptUrl, fetchMileageRate,
   type ExpenseLine, type ExpenseCategory, type ExpenseRecord,
 } from '../lib/expenses'
-import { fetchVendors, vendorLabel, type Vendor, type PropertyRow } from '../lib/finance'
+import {
+  fetchVendors, vendorLabel, fetchClosedYears, confirmClosedYearChange,
+  type Vendor, type PropertyRow,
+} from '../lib/finance'
 
 type Props = {
   organizationId: string
@@ -37,14 +40,19 @@ export function Expenses({ organizationId, isAdmin, year, properties }: Props) {
   const [lines, setLines] = useState<ExpenseLine[] | null>(null)
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [mileageRate, setMileageRate] = useState<number | null>(null)
+  const [closedYears, setClosedYears] = useState<number[]>([])
   // null = no form; 'new' = adding; a record = editing that expense.
   const [editing, setEditing] = useState<'new' | ExpenseRecord | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchMileageRate(organizationId).then(setMileageRate).catch(() => setMileageRate(null))
     fetchVendors(organizationId).then(setVendors).catch(() => setVendors([]))
+    fetchClosedYears(organizationId).then((c) => setClosedYears(c.map((x) => x.year)))
+      .catch(() => setClosedYears([]))
   }, [organizationId])
+  useEffect(() => {
+    fetchMileageRate(organizationId, year).then(setMileageRate).catch(() => setMileageRate(null))
+  }, [organizationId, year])
 
   function load() {
     setError(null)
@@ -77,6 +85,7 @@ export function Expenses({ organizationId, isAdmin, year, properties }: Props) {
           organizationId={organizationId}
           properties={properties}
           vendors={vendors}
+          closedYears={isAdmin ? closedYears : []}
           existing={editing === 'new' ? null : editing}
           onDone={(saved) => {
             setEditing(null)
@@ -98,6 +107,14 @@ export function Expenses({ organizationId, isAdmin, year, properties }: Props) {
         </select>
       </div>
 
+      {closedYears.includes(year) && (
+        <p className="muted" style={{ marginTop: 0 }}>
+          🔒 The books for {year} are closed.{' '}
+          {isAdmin
+            ? 'You can still change them; each change is recorded for your accountant.'
+            : 'Only an admin can change them now.'}
+        </p>
+      )}
       {error && <p className="error-text">{error}</p>}
       {lines === null && !error && <p className="muted">Loading…</p>}
 
@@ -151,8 +168,8 @@ export function Expenses({ organizationId, isAdmin, year, properties }: Props) {
 
       {mileageRate === null && (
         <p className="muted" style={{ fontSize: '0.85rem' }}>
-          Mileage logged on repair jobs isn't counted yet: there's no per-mile
-          rate set.{' '}
+          Mileage logged on repair jobs in {year} isn't counted: there's no
+          per-mile rate for {year} or earlier.{' '}
           {isAdmin
             ? <button className="link" onClick={() => navigate('/settings')}>Set one in Settings</button>
             : 'An admin can set one in Settings.'}
@@ -168,6 +185,7 @@ export function Expenses({ organizationId, isAdmin, year, properties }: Props) {
             <div className="card-list">
               {lines.map((l) => (
                 <ExpenseRow key={`${l.source}-${l.id}`} line={l} onDeleted={load}
+                  closedYears={isAdmin ? closedYears : []}
                   onEdit={() => startEdit(l.id)} onError={setError} />
               ))}
             </div>
@@ -179,9 +197,11 @@ export function Expenses({ organizationId, isAdmin, year, properties }: Props) {
 }
 
 function ExpenseRow({
-  line, onDeleted, onEdit, onError,
+  line, onDeleted, onEdit, onError, closedYears,
 }: {
   line: ExpenseLine
+  /** Closed years to warn an admin about; empty for anyone else. */
+  closedYears: number[]
   onDeleted: () => void
   onEdit: () => void
   onError: (m: string) => void
@@ -204,7 +224,10 @@ function ExpenseRow({
   }
 
   async function remove() {
-    if (!window.confirm(`Delete this ${money(line.amount)} expense?`)) return
+    const y = Number(line.spent_on.slice(0, 4))
+    if (closedYears.includes(y)) {
+      if (!confirmClosedYearChange(y)) return
+    } else if (!window.confirm(`Delete this ${money(line.amount)} expense?`)) return
     setBusy(true)
     try {
       await deleteExpense(line.id, line.receipt_path)
@@ -248,11 +271,13 @@ function ExpenseRow({
 }
 
 function ExpenseForm({
-  organizationId, properties, vendors, existing, onDone,
+  organizationId, properties, vendors, existing, onDone, closedYears,
 }: {
   organizationId: string
   properties: PropertyRow[]
   vendors: Vendor[]
+  /** Closed years to warn an admin about; empty for anyone else. */
+  closedYears: number[]
   existing: ExpenseRecord | null
   onDone: (saved: boolean) => void
 }) {
@@ -273,6 +298,10 @@ function ExpenseForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    // Both ends of a move: taking a bill out of a closed year changes it too.
+    const touched = [spentOn, existing?.spent_on].filter(Boolean).map((d) => Number(d!.slice(0, 4)))
+    const closedHit = touched.find((y) => closedYears.includes(y))
+    if (closedHit && !confirmClosedYearChange(closedHit)) return
     setBusy(true); setError(null)
     try {
       // Receipt first: if it fails nothing is saved, rather than leaving
@@ -328,7 +357,9 @@ function ExpenseForm({
           <select id="x-property" value={propertyId}
             onChange={(e) => setPropertyId(e.target.value)}>
             <option value="">All properties (shared)</option>
-            {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {properties.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}{p.sold_on ? ' (sold)' : ''}</option>
+            ))}
           </select>
           {!propertyId && (
             <span className="muted">

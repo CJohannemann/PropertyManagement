@@ -205,19 +205,17 @@ export async function expenseReceiptUrl(path: string): Promise<string | null> {
   return data?.signedUrl ?? null
 }
 
-/** The organization's per-mile rate for repair-job mileage, or null. */
-export async function fetchMileageRate(organizationId: string): Promise<number | null> {
+/**
+ * The per-mile rate repair-job mileage in `year` is costed at: that year's,
+ * else the latest earlier year's, else null (miles logged, not costed).
+ * Mirrors mileage_rate_for() in 038_books_fixes.sql.
+ */
+export async function fetchMileageRate(organizationId: string, year: number): Promise<number | null> {
   if (!supabase) return null
-  const { data, error } = await supabase.from('organizations')
-    .select('mileage_rate').eq('id', organizationId).single()
+  const { data, error } = await supabase.from('mileage_rates').select('rate')
+    .eq('organization_id', organizationId).lte('year', year)
+    .order('year', { ascending: false }).limit(1)
   if (error) throw error
-  return data?.mileage_rate == null ? null : Number(data.mileage_rate)
-}
-
-/** Admin only — organizations are updatable by admins alone (schema RLS). */
-export async function setMileageRate(organizationId: string, rate: number | null): Promise<void> {
-  if (!supabase) throw new Error('Supabase not configured')
-  const { error } = await supabase.from('organizations')
-    .update({ mileage_rate: rate }).eq('id', organizationId)
-  if (error) throw error
+  const row = (data ?? [])[0] as { rate: number } | undefined
+  return row ? Number(row.rate) : null
 }

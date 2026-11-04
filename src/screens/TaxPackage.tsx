@@ -9,15 +9,16 @@ import {
   fetchIncomeLines, isIncome, INCOME_KIND_LABEL, fetchFinancials, saveFinancials,
   fetchImprovements, addImprovement, deleteImprovement, fetchVendorTotals,
   nec1099Threshold, downloadFile, RECOVERY_CHOICES,
+  fetchClosedYears, closeYear, reopenYear, fetchYearChanges, confirmClosedYearChange,
   type IncomeLine, type PropertyFinancials, type Improvement, type PropertyRow,
-  type VendorTotal,
+  type VendorTotal, type ClosedYear, type YearChange,
 } from '../lib/finance'
 import {
-  depreciationForYear, buildingBasis, accumulatedThrough, type RecoveryYears,
+  depreciationForYear, buildingBasis, accumulatedThrough, saleGain, type RecoveryYears,
 } from '../lib/depreciation'
 import { toCsv, buildZip, safeFileName, type ZipEntry } from '../lib/fileExport'
 
-type Props = { organizationId: string; year: number; properties: PropertyRow[] }
+type Props = { organizationId: string; year: number; properties: PropertyRow[]; isAdmin: boolean }
 
 /** One column of Schedule E: a property, or the shared bills. */
 type Column = {
@@ -33,20 +34,23 @@ type Column = {
 const SHARED = 'shared'
 
 function depreciationFor(
-  propertyId: string, purchaseDate: string | null, year: number,
+  property: PropertyRow, year: number,
   fin: PropertyFinancials | undefined, improvements: Improvement[],
 ): { amount: number; note: string | null } {
   let amount = 0
   let note: string | null = null
   const basis = fin ? buildingBasis(fin) : 0
-  const start = fin?.placed_in_service ?? purchaseDate
+  const start = fin?.placed_in_service ?? property.purchase_date
+  // Depreciation stops at a sale (038): mid-month in the month it sold.
+  const sold = property.sold_on
+  if (sold && Number(sold.slice(0, 4)) < year) return { amount: 0, note: null }
   if (basis > 0 && start) {
-    amount += depreciationForYear(basis, start, 27.5, year)
+    amount += depreciationForYear(basis, start, 27.5, year, sold)
   } else {
     note = 'Add the purchase price and land value to estimate depreciation.'
   }
-  for (const i of improvements.filter((x) => x.property_id === propertyId)) {
-    amount += depreciationForYear(i.cost, i.placed_in_service, i.recovery_years, year)
+  for (const i of improvements.filter((x) => x.property_id === property.id)) {
+    amount += depreciationForYear(i.cost, i.placed_in_service, i.recovery_years, year, sold)
   }
   return { amount: Math.round(amount * 100) / 100, note }
 }
@@ -56,10 +60,9 @@ function buildColumns(
   financials: PropertyFinancials[], improvements: Improvement[], year: number,
 ): Column[] {
   const cols: Column[] = properties.map((p) => {
-    const d = depreciationFor(p.id, p.purchase_date,
-      year, financials.find((f) => f.property_id === p.id), improvements)
+    const d = depreciationFor(p, year, financials.find((f) => f.property_id === p.id), improvements)
     return {
-      key: p.id, name: p.name, rents: 0, byCategory: new Map(),
+      key: p.id, name: p.sold_on ? `${p.name} (sold ${p.sold_on})` : p.name, rents: 0, byCategory: new Map(),
       depreciation: d.amount, depreciationNote: d.note,
     }
   })
@@ -73,11 +76,40 @@ function buildColumns(
     const c = find(e.property_id)
     c.byCategory.set(e.category, (c.byCategory.get(e.category) ?? 0) + e.amount)
   }
-  return shared.byCategory.size > 0 ? [...cols, shared] : cols
+  // Sold before this year and nothing in it: not a column on this year's return.
+  const live = cols.filter((c) => {
+    const p = properties.find((x) => x.id === c.key)
+    return !(p?.sold_on && Number(p.sold_on.slice(0, 4)) < year
+      && c.rents === 0 && c.byCategory.size === 0 && c.depreciation === 0)
+  })
+  return shared.byCategory.size > 0 ? [...live, shared] : live
 }
 
 const totalExpenses = (c: Column) =>
   [...c.byCategory.values()].reduce((s, v) => s + v, 0) + c.depreciation
+
+type Sale = { property: PropertyRow; result: ReturnType<typeof saleGain> | null }
+
+/** Properties sold in `year`, with the gain where the purchase details allow it. */
+function salesIn(
+  year: number, properties: PropertyRow[], financials: PropertyFinancials[], improvements: Improvement[],
+): Sale[] {
+  return properties.filter((p) => p.sold_on?.startsWith(String(year))).map((p) => {
+    const f = financials.find((x) => x.property_id === p.id)
+    const inService = f?.placed_in_service ?? p.purchase_date
+    if (!f?.purchase_price || f.sale_price == null || !inService) return { property: p, result: null }
+    return {
+      property: p,
+      result: saleGain({
+        salePrice: f.sale_price, sellingCosts: f.selling_costs ?? 0,
+        purchasePrice: f.purchase_price, closingCosts: f.closing_costs ?? 0,
+        landValue: f.land_value ?? 0, soldOn: p.sold_on!, buildingInService: inService,
+        improvements: improvements.filter((i) => i.property_id === p.id)
+          .map((i) => ({ cost: i.cost, inService: i.placed_in_service, recoveryYears: i.recovery_years })),
+      }),
+    }
+  })
+}
 
 /**
  * The year-end tax package: what goes on Schedule E for each property,
@@ -88,7 +120,7 @@ const totalExpenses = (c: Column) =>
  * figure is an estimate to check with the accountant — the screen says so
  * rather than looking like a filed return.
  */
-export function TaxPackage({ organizationId, year, properties }: Props) {
+export function TaxPackage({ organizationId, year, properties, isAdmin }: Props) {
   const [income, setIncome] = useState<IncomeLine[] | null>(null)
   const [expenses, setExpenses] = useState<ExpenseLine[]>([])
   const [financials, setFinancials] = useState<PropertyFinancials[]>([])
@@ -97,6 +129,9 @@ export function TaxPackage({ organizationId, year, properties }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<string | null>(null)
   const [editingProperty, setEditingProperty] = useState<string | null>(null)
+  const [closed, setClosed] = useState<ClosedYear | null>(null)
+  const [changes, setChanges] = useState<YearChange[]>([])
+  const [showChanges, setShowChanges] = useState(false)
 
   function load() {
     setError(null)
@@ -107,8 +142,12 @@ export function TaxPackage({ organizationId, year, properties }: Props) {
       fetchFinancials(),
       fetchImprovements(),
       fetchVendorTotals(organizationId, year),
-    ]).then(([i, e, f, im, v]) => {
+      fetchClosedYears(organizationId),
+      fetchYearChanges(organizationId, year),
+    ]).then(([i, e, f, im, v, c, ch]) => {
       setIncome(i); setExpenses(e); setFinancials(f); setImprovements(im); setVendorTotals(v)
+      setClosed(c.find((x) => x.year === year) ?? null)
+      setChanges(ch)
     }).catch((e) => { setError(errorMessage(e)); setIncome([]) })
   }
 
@@ -126,12 +165,33 @@ export function TaxPackage({ organizationId, year, properties }: Props) {
   const onlineFees = online.reduce((s, l) => s + l.processing_fee, 0)
   const threshold = nec1099Threshold(year)
   const owed1099 = vendorTotals.filter((v) => v.gets_1099 && v.reportable >= threshold)
+  const sales = salesIn(year, properties, financials, improvements)
+
+  async function toggleClosed() {
+    setError(null)
+    try {
+      if (closed) {
+        if (!window.confirm(`Reopen ${year}? Property managers will be able to change it again.`)) return
+        await reopenYear(organizationId, year)
+      } else {
+        if (!window.confirm(
+          `Close the books for ${year}?\n\nDo this once your return is filed. Property managers `
+          + `won't be able to change ${year} any more; you still can, and every change after `
+          + 'closing is listed here for your accountant.',
+        )) return
+        await closeYear(organizationId, year)
+      }
+      load()
+    } catch (e) {
+      setError(errorMessage(e))
+    }
+  }
 
   async function download() {
     setProgress('Building your package…')
     try {
       const files = buildPackageFiles(year, columns, income!, expenses, properties,
-        financials, improvements, vendorTotals)
+        financials, improvements, vendorTotals, sales, changes)
       const withReceipts = expenses.filter((e) => e.receipt_path)
       const missed: string[] = []
       const entries: ZipEntry[] = files.map((f) => ({ name: f.name, data: new TextEncoder().encode(f.text) }))
@@ -151,7 +211,7 @@ export function TaxPackage({ organizationId, year, properties }: Props) {
         }
       }
       const readme = readmeText(year, columns, totalRents, totalCosts, depositsReceived,
-        depositsKept, onlineGross, onlineFees, owed1099, threshold, missed)
+        depositsKept, onlineGross, onlineFees, owed1099, threshold, missed, sales, closed, changes)
       entries.unshift({ name: 'README.txt', data: new TextEncoder().encode(readme) })
       downloadFile(`rental-tax-package-${year}.zip`, buildZip(entries), 'application/zip')
       setProgress(missed.length
@@ -165,6 +225,49 @@ export function TaxPackage({ organizationId, year, properties }: Props) {
 
   return (
     <div className="tax-package">
+      <div className="card-list" style={{ marginBottom: '1rem' }}>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'baseline' }}>
+            <strong>{closed ? `🔒 ${year} is closed` : `${year} is open`}</strong>
+            {isAdmin && (
+              <button className="link no-print" onClick={toggleClosed}>
+                {closed ? 'Reopen' : `Close ${year}`}
+              </button>
+            )}
+          </div>
+          <div className="muted">
+            {closed
+              ? `Closed ${new Date(closed.closed_at).toLocaleDateString('en-US')}. `
+                + (isAdmin ? 'You can still make changes; each is listed below.' : 'Only an admin can change it.')
+              : 'Close the year once your return is filed, so the numbers stop moving.'}
+          </div>
+          {closed && (
+            changes.length === 0
+              ? <div className="muted">Nothing has changed since.</div>
+              : (
+                <>
+                  <button className="link" onClick={() => setShowChanges((v) => !v)}>
+                    {changes.length} change(s) since closing {showChanges ? '▴' : '▾'}
+                  </button>
+                  {showChanges && (
+                    <ul style={{ paddingLeft: '1.1rem', marginBottom: 0, fontSize: '0.9rem' }}>
+                      {changes.map((c) => (
+                        <li key={c.id}>
+                          {c.summary}
+                          <span className="muted">
+                            {' · '}{new Date(c.changed_at).toLocaleDateString('en-US')}
+                            {c.changed_by ? '' : ' · by Stripe / the bank'}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )
+          )}
+        </div>
+      </div>
+
       <div className="card-list">
         <div>
           <strong>{year} at a glance</strong>
@@ -234,6 +337,7 @@ export function TaxPackage({ organizationId, year, properties }: Props) {
             )}
             {editingProperty === c.key && (
               <PurchaseDetails
+                closedYears={isAdmin && closed ? [year] : []}
                 property={properties.find((p) => p.id === c.key)!}
                 financials={financials.find((f) => f.property_id === c.key)}
                 improvements={improvements.filter((i) => i.property_id === c.key)}
@@ -244,6 +348,51 @@ export function TaxPackage({ organizationId, year, properties }: Props) {
           </div>
         </div>
       ))}
+
+      {sales.length > 0 && (
+        <>
+          <h3 style={{ marginTop: '2rem' }}>Property sold in {year}</h3>
+          {sales.map(({ property, result }) => (
+            <div key={property.id} className="card-list" style={{ marginBottom: '1rem' }}>
+              <div>
+                <strong>{property.name} · sold {property.sold_on}</strong>
+                {!result ? (
+                  <p className="muted" style={{ marginBottom: 0 }}>
+                    Add the purchase price, land value and sale price (under
+                    "Purchase details") to estimate the gain.
+                  </p>
+                ) : (
+                  <>
+                    <table style={{ width: '100%', marginTop: '0.5rem', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                      <tbody>
+                        <SumRow label="Sale price less selling costs" value={result.realized} />
+                        <SumRow label="Depreciation taken (estimate)" value={result.depreciation} />
+                        <SumRow label="Adjusted basis" value={result.adjustedBasis} />
+                        <SumRow label={result.gain >= 0 ? 'Gain' : 'Loss'} value={result.gain} strong />
+                        {result.unrecaptured1250 > 0 && (
+                          <SumRow label="of which depreciation recapture (§1250, up to 25%)" value={result.unrecaptured1250} />
+                        )}
+                        {result.recapture1245 > 0 && (
+                          <SumRow label="of which ordinary income (§1245, appliances etc.)" value={result.recapture1245} />
+                        )}
+                        {result.capitalGain > 0 && (
+                          <SumRow label="of which capital gain" value={result.capitalGain} />
+                        )}
+                      </tbody>
+                    </table>
+                    <p className="muted" style={{ fontSize: '0.8rem', marginBottom: 0 }}>
+                      Reported on Form 4797, not Schedule E. The recapture part is
+                      taxed at a higher rate than the rest of the gain. Uses this
+                      app's depreciation estimate; your accountant uses what was
+                      actually claimed. A 1031 exchange would defer all of it.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
 
       <h3 style={{ marginTop: '2rem' }}>Deposits</h3>
       <div className="card-list">
@@ -331,8 +480,9 @@ function LineRow({ line, label, value, strong }: { line: string; label: string; 
 
 /** Purchase price, land value and improvements: what depreciation needs. */
 function PurchaseDetails({
-  property, financials, improvements, year, onChanged,
+  property, financials, improvements, year, onChanged, closedYears,
 }: {
+  closedYears: number[]
   property: PropertyRow
   financials: PropertyFinancials | undefined
   improvements: Improvement[]
@@ -375,6 +525,8 @@ function PurchaseDetails({
 
   async function addImp(e: React.FormEvent) {
     e.preventDefault()
+    const y = Number(when.slice(0, 4))
+    if (closedYears.includes(y) && !confirmClosedYearChange(y)) return
     setBusy(true); setError(null)
     try {
       await addImprovement({
@@ -419,8 +571,8 @@ function PurchaseDetails({
         {basis > 0 && inService && (
           <p className="muted" style={{ fontSize: '0.85rem' }}>
             Depreciable basis {money(basis)} over 27.5 years: about{' '}
-            {money(depreciationForYear(basis, inService, 27.5, year))} for {year},
-            {' '}{money(accumulatedThrough(basis, inService, 27.5, year))} through {year}.
+            {money(depreciationForYear(basis, inService, 27.5, year, property.sold_on))} for {year},
+            {' '}{money(accumulatedThrough(basis, inService, 27.5, year, property.sold_on))} through {year}.
           </p>
         )}
         <button className="primary" type="submit" disabled={busy}>
@@ -437,13 +589,14 @@ function PurchaseDetails({
         <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', padding: '0.3rem 0', borderTop: '1px solid var(--line)' }}>
           <span>
             {i.description}
-            <span className="muted"> · {i.placed_in_service} · {i.recovery_years} yr · {money(depreciationForYear(i.cost, i.placed_in_service, i.recovery_years, year))} in {year}</span>
+            <span className="muted"> · {i.placed_in_service} · {i.recovery_years} yr · {money(depreciationForYear(i.cost, i.placed_in_service, i.recovery_years, year, property.sold_on))} in {year}</span>
           </span>
           <span style={{ whiteSpace: 'nowrap' }}>
             {money(i.cost)}{' '}
             <button className="link" aria-label={`Remove ${i.description}`} style={{ color: 'var(--danger)' }}
               onClick={async () => {
-                if (!window.confirm(`Remove ${i.description}?`)) return
+                const y = Number(i.placed_in_service.slice(0, 4))
+                if (closedYears.includes(y) ? !confirmClosedYearChange(y) : !window.confirm(`Remove ${i.description}?`)) return
                 try { await deleteImprovement(i.id); onChanged() } catch (err) { setError(errorMessage(err)) }
               }}>×</button>
           </span>
@@ -483,7 +636,7 @@ function PurchaseDetails({
 function buildPackageFiles(
   year: number, columns: Column[], income: IncomeLine[], expenses: ExpenseLine[],
   properties: PropertyRow[], financials: PropertyFinancials[], improvements: Improvement[],
-  vendorTotals: VendorTotal[],
+  vendorTotals: VendorTotal[], sales: Sale[], changes: YearChange[],
 ): { name: string; text: string }[] {
   const r2 = (n: number) => Math.round(n * 100) / 100
 
@@ -521,17 +674,19 @@ function buildPackageFiles(
     const f = financials.find((x) => x.property_id === p.id)
     const basis = f ? buildingBasis(f) : 0
     const start = f?.placed_in_service ?? p.purchase_date
+    if (p.sold_on && Number(p.sold_on.slice(0, 4)) < year) continue
     if (basis > 0 && start) {
       depRows.push([p.name, 'Building', start, f?.purchase_price ?? '', f?.land_value ?? '', basis, 27.5,
-        depreciationForYear(basis, start, 27.5, year), accumulatedThrough(basis, start, 27.5, year)])
+        depreciationForYear(basis, start, 27.5, year, p.sold_on),
+        accumulatedThrough(basis, start, 27.5, year, p.sold_on)])
     } else {
       depRows.push([p.name, 'Building', start ?? '', f?.purchase_price ?? '', f?.land_value ?? '', '', 27.5,
         'missing purchase details', ''])
     }
     for (const i of improvements.filter((x) => x.property_id === p.id)) {
       depRows.push([p.name, i.description, i.placed_in_service, i.cost, '', i.cost, i.recovery_years,
-        depreciationForYear(i.cost, i.placed_in_service, i.recovery_years, year),
-        accumulatedThrough(i.cost, i.placed_in_service, i.recovery_years, year)])
+        depreciationForYear(i.cost, i.placed_in_service, i.recovery_years, year, p.sold_on),
+        accumulatedThrough(i.cost, i.placed_in_service, i.recovery_years, year, p.sold_on)])
     }
   }
   const depCsv = toCsv(
@@ -545,19 +700,41 @@ function buildPackageFiles(
       v.card_payments, v.gets_1099 && v.reportable >= threshold ? 'YES' : 'no', v.has_w9 ? 'yes' : 'no', v.has_tin ? 'yes' : 'no']),
   )
 
-  return [
+  const files = [
     { name: `schedule-e-${year}.csv`, text: toCsv(header, schedule) },
     { name: `income-${year}.csv`, text: incomeCsv },
     { name: `expenses-${year}.csv`, text: expensesCsv },
     { name: `depreciation-${year}.csv`, text: depCsv },
     { name: `1099-vendors-${year}.csv`, text: vendorCsv },
   ]
+  if (sales.length) {
+    files.push({
+      name: `property-sales-${year}.csv`,
+      text: toCsv(
+        ['Property', 'Sold on', 'Amount realized', 'Depreciation taken (estimate)', 'Adjusted basis',
+          'Gain or loss', 'Unrecaptured 1250 gain', '1245 recapture', 'Capital gain'],
+        sales.map(({ property, result }) => result
+          ? [property.name, property.sold_on, result.realized, result.depreciation, result.adjustedBasis,
+              result.gain, result.unrecaptured1250, result.recapture1245, result.capitalGain]
+          : [property.name, property.sold_on, 'missing purchase or sale details', '', '', '', '', '', '']),
+      ),
+    })
+  }
+  if (changes.length) {
+    files.push({
+      name: `changes-after-closing-${year}.csv`,
+      text: toCsv(['When', 'By', 'What'], changes.map((c) => [
+        c.changed_at, c.changed_by ? 'a user' : 'Stripe / the bank', c.summary])),
+    })
+  }
+  return files
 }
 
 function readmeText(
   year: number, columns: Column[], rents: number, costs: number,
   depositsReceived: number, depositsKept: number, onlineGross: number, onlineFees: number,
   owed1099: VendorTotal[], threshold: number, missed: string[],
+  sales: Sale[], closed: ClosedYear | null, changes: YearChange[],
 ): string {
   const m = (n: number) => money(n)
   const lines = [
@@ -576,6 +753,12 @@ function readmeText(
       + (c.key === SHARED ? ' (shared — needs splitting between properties)' : `, net ${m(c.rents - totalExpenses(c))}`)
       + (c.depreciationNote ? ' — depreciation missing: no purchase details' : '')),
     '',
+    ...(closed ? [`BOOKS CLOSED ${closed.closed_at.slice(0, 10)}`
+      + (changes.length ? ` — ${changes.length} change(s) since; see changes-after-closing-${year}.csv` : ' — no changes since'), ''] : []),
+    ...(sales.length ? ['PROPERTY SOLD (Form 4797, not Schedule E)', ...sales.map(({ property, result }) => result
+      ? `  ${property.name}, sold ${property.sold_on}: ${result.gain >= 0 ? 'gain' : 'loss'} ${m(result.gain)}`
+        + ` (depreciation recapture ${m(result.unrecaptured1250 + result.recapture1245)}) — see property-sales-${year}.csv`
+      : `  ${property.name}, sold ${property.sold_on}: purchase or sale details missing`), ''] : []),
     'DEPOSITS',
     `  Received and held (not income): ${m(depositsReceived)}`,
     `  Kept at move-out (included in income): ${m(depositsKept)}`,

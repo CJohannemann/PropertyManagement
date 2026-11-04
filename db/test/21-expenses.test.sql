@@ -120,7 +120,7 @@ select assert((select count(*) from storage.objects where bucket_id = 'expense-r
 
 reset role;
 select set_config('request.jwt.uid', 'e1111111-1111-1111-1111-111111111111', false);
-update organizations set mileage_rate = 0.70 where id = :'org';
+insert into mileage_rates (organization_id, year, rate) values (:'org', 2026, 0.70);
 insert into maintenance_jobs (organization_id, property_id, unit_id, status)
 values (:'org', :'prop', :'unit', 'completed') returning id as job \gset
 insert into job_entries (job_id, technician_id, entry_type, description, cost, vendor, created_at)
@@ -166,7 +166,7 @@ select assert_rejected(
 
 -- With no mileage rate, miles are logged but not costed rather than free.
 reset role;
-update organizations set mileage_rate = null where id = :'org';
+delete from mileage_rates where organization_id = :'org';
 set role authenticated;
 select set_config('request.jwt.uid', 'e1111111-1111-1111-1111-111111111111', false);
 select assert(

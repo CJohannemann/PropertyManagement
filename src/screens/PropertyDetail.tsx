@@ -11,6 +11,7 @@ import { fetchSigningStatus, type SigningStatus } from '../lib/signatures'
 import { EquipmentList } from './EquipmentList'
 import { EndLeaseForm, LeaseRecord, DepositPanel } from './LeaseEnding'
 import { endReasonLabel } from '../lib/leaseEnd'
+import { markPropertySold, unmarkPropertySold } from '../lib/finance'
 
 export type PropertySummary = {
   id: string
@@ -19,6 +20,8 @@ export type PropertySummary = {
   city: string
   state: string
   zip: string
+  /** Set once the property has been sold (038). */
+  sold_on?: string | null
 }
 
 type Props = {
@@ -74,6 +77,21 @@ export function PropertyDetail({
         )}
       </p>
 
+      {property.sold_on && (
+        <div className="card-list" style={{ marginTop: 0 }}>
+          <div>
+            <strong>Sold on {property.sold_on}</strong>
+            <div className="muted">
+              Its history stays for your taxes. It's left out of occupancy and
+              can't take new leases. The gain on the sale is on Finances → Taxes.
+            </div>
+            {canManageUnits && (
+              <UndoSale propertyId={property.id} onDone={onPropertyChanged} />
+            )}
+          </div>
+        </div>
+      )}
+
       {editingProperty && (
         <PropertyForm
           property={property}
@@ -122,7 +140,100 @@ export function PropertyDetail({
       <h3 style={{ marginTop: '2rem' }}>Shared building equipment</h3>
       <EquipmentList propertyId={property.id} unitId={null}
         memberId={memberId} canDelete />
+
+      {/* Admin only: the database refuses anyone else. */}
+      {canManageUnits && !property.sold_on && (
+        <SellProperty property={property} onSold={onPropertyChanged} />
+      )}
     </div>
+  )
+}
+
+/**
+ * Recording a sale, in place of deleting the property.
+ *
+ * Deleting would take every payment, expense and receipt with it — and the
+ * year of sale still has to be reported, then kept for years after. So a
+ * sale is a date, a price and the selling costs, and the history stays.
+ */
+function SellProperty({ property, onSold }: { property: PropertySummary; onSold: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [soldOn, setSoldOn] = useState('')
+  const [price, setPrice] = useState('')
+  const [costs, setCosts] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (!open) {
+    return (
+      <p style={{ marginTop: '2.5rem' }}>
+        <button className="link" onClick={() => setOpen(true)}>Sold this property?</button>
+      </p>
+    )
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!window.confirm(`Mark ${property.name} as sold on ${soldOn}?`)) return
+    setBusy(true); setError(null)
+    try {
+      await markPropertySold(property.id, soldOn, Number(price), Number(costs || 0))
+      onSold()
+    } catch (err) {
+      setError(errorMessage(err))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="card-list" style={{ marginTop: '2.5rem' }}>
+      <div>
+        <h3 style={{ marginTop: 0 }}>Mark as sold</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          End any leases first, with "Property sold" as the reason. Everything
+          recorded so far is kept for your taxes; the property stops counting
+          toward occupancy and can't take new leases.
+        </p>
+        <div className="field">
+          <label htmlFor="sale-date">Closing date</label>
+          <input id="sale-date" type="date" required value={soldOn}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => setSoldOn(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="sale-price">Sale price ($)</label>
+          <input id="sale-price" type="number" min="0" step="0.01" required inputMode="decimal"
+            value={price} onChange={(e) => setPrice(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="sale-costs">Selling costs ($)</label>
+          <input id="sale-costs" type="number" min="0" step="0.01" inputMode="decimal"
+            value={costs} onChange={(e) => setCosts(e.target.value)} />
+          <span className="muted">Agent commission, closing costs and transfer tax you paid — from the closing statement.</span>
+        </div>
+        {error && <p className="error-text">{error}</p>}
+        <button className="primary" type="submit" disabled={busy}>
+          {busy ? 'Saving…' : 'Mark as sold'}
+        </button>
+        <button className="link" type="button" onClick={() => setOpen(false)}
+          style={{ marginTop: '0.5rem' }} disabled={busy}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function UndoSale({ propertyId, onDone }: { propertyId: string; onDone: () => void }) {
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <>
+      <button className="link" style={{ marginTop: '0.5rem' }} onClick={async () => {
+        if (!window.confirm('Undo the sale? The sale price is cleared and the property counts as yours again.')) return
+        try { await unmarkPropertySold(propertyId); onDone() } catch (e) { setError(errorMessage(e)) }
+      }}>Undo — this was a mistake</button>
+      {error && <p className="error-text">{error}</p>}
+    </>
   )
 }
 

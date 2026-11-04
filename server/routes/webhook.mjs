@@ -8,7 +8,7 @@
 import express from 'express'
 import { stripe } from '../stripe.mjs'
 import { config } from '../config.mjs'
-import { upsertPayment, reversePayment, updateConnectState } from '../ledger.mjs'
+import { upsertPayment, reversePayment, recordPartialRefund, updateConnectState } from '../ledger.mjs'
 
 export const webhookRouter = express.Router()
 
@@ -67,9 +67,17 @@ webhookRouter.post(
           )
           break
 
-        case 'charge.refunded':
-          await reversePayment(event.data.object.payment_intent, 'refunded')
+        case 'charge.refunded': {
+          // Sent for partial refunds as well as full ones. `refunded` is
+          // Stripe's own "the whole charge has gone back".
+          const ch = event.data.object
+          if (ch.refunded || ch.amount_refunded >= ch.amount) {
+            await reversePayment(ch.payment_intent, 'refunded')
+          } else {
+            await recordPartialRefund(ch.payment_intent, ch.amount_refunded)
+          }
           break
+        }
 
         // A landlord finished, or progressed through, onboarding.
         case 'account.updated':

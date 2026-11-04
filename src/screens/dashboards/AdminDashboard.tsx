@@ -43,7 +43,7 @@ export function AdminDashboard({
     if (!supabase) return
     const { data, error } = await supabase
       .from('properties')
-      .select('id, name, address_line1, city, state, zip, units(id)')
+      .select('id, name, address_line1, city, state, zip, sold_on, units(id)')
       .order('created_at', { ascending: false })
     if (error) setError(describeError(error))
     else setProperties(data as unknown as Property[])
@@ -153,7 +153,10 @@ export function AdminDashboard({
         )}
 
         <div className="card-list">
-          {properties?.map((p) => (
+          {/* Sold ones last, and said: they stay for their history. */}
+          {properties && [...properties]
+            .sort((a, b) => Number(!!a.sold_on) - Number(!!b.sold_on))
+            .map((p) => (
             <div
               key={p.id}
               role="button"
@@ -171,7 +174,9 @@ export function AdminDashboard({
               <div className="muted">
                 {p.address_line1}, {p.city}, {p.state} {p.zip}
               </div>
-              <div className="muted">{p.units.length} unit(s)</div>
+              <div className="muted">
+                {p.sold_on ? `Sold ${p.sold_on}` : `${p.units.length} unit(s)`}
+              </div>
             </div>
           ))}
         </div>
