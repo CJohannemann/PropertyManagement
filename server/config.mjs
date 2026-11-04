@@ -33,6 +33,25 @@ function loadEnvFile(path) {
 const fileEnv = loadEnvFile(ENV_PATH)
 const env = { ...fileEnv, ...process.env }
 
+/**
+ * A fee setting as a number, checked at boot. Unchecked, a value like
+ * "0.8%" became NaN, every fee came out NaN, and the first sign of it was
+ * Stripe refusing a tenant's rent with "Invalid integer: NaN". Blank or
+ * absent means the default.
+ */
+function feeNumber(name, fallback) {
+  const raw = env[name]
+  if (raw === undefined || raw === '') return fallback
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(
+      `${name} must be a plain number (e.g. ${fallback}), not "${raw}". ` +
+      `Fix it in ${ENV_PATH}.`,
+    )
+  }
+  return value
+}
+
 function required(name) {
   const value = env[name]
   if (!value) {
@@ -61,8 +80,8 @@ export const config = {
   // their number to change, and it should not take a migration and a
   // deploy to follow them. Percent is a fraction (0.008 = 0.8%).
   achFee: {
-    percent: Number(env.ACH_FEE_PERCENT ?? 0.008),
-    capCents: Number(env.ACH_FEE_CAP_CENTS ?? 500),
+    percent: feeNumber('ACH_FEE_PERCENT', 0.008),
+    capCents: feeNumber('ACH_FEE_CAP_CENTS', 500),
   },
 }
 
