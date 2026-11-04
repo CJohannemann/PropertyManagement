@@ -61,6 +61,10 @@ export function parsePath(rawPath: string): Location {
 
   if ((ROUTES as string[]).includes(path)) return { route: path as Route }
 
+  // Renamed screens, so an old bookmark or a phone that reopens where it
+  // left off lands on the new name rather than "Page not found".
+  if (path === '/expenses') return { route: '/finances' }
+
   // One level of parameter: /properties/<id>. Deliberately not a general
   // pattern matcher — there is exactly one parameterised screen, and a
   // route list is easier to read than a matcher that could handle

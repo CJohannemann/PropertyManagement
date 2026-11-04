@@ -111,6 +111,7 @@ export default function App() {
     // showing, so they share one case rather than five near-identical ones.
     case '/dashboard':
     case '/rent':
+    case '/finances':
     case '/maintenance':
     case '/properties':
     case '/settings':

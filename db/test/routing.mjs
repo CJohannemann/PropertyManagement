@@ -10,6 +10,7 @@
 // ones worth pinning down are the edges — a trailing slash, an unknown
 // path, an id that needs escaping.
 
+import { readFileSync } from 'node:fs'
 import { parsePath, hrefFor, APP_SECTIONS, SIGNED_IN_ONLY } from '../../src/lib/routePaths.ts'
 
 let failures = 0
@@ -63,6 +64,14 @@ console.log('\nthe nav and the guard agree with the routes')
 for (const s of APP_SECTIONS) {
   check(`${s.label} points at a real screen`, parsePath(s.route).route, s.route)
 }
+// And every section must be one App.tsx actually renders. The route list
+// and App's switch are separate, and a section added to one but not the
+// other showed "Page not found" when its own tab was tapped.
+const appSource = readFileSync(new URL('../../src/App.tsx', import.meta.url), 'utf8')
+for (const s of APP_SECTIONS) {
+  check(`${s.label} (${s.route}) is rendered by App`, appSource.includes(`case '${s.route}':`), true)
+}
+check('the old Expenses address lands on Finances', parsePath('/expenses'), { route: '/finances' })
 // Every section behind the sign-in guard must be a route that exists, or
 // signing out would strand someone on a 404.
 for (const p of SIGNED_IN_ONLY) {
