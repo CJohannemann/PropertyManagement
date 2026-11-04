@@ -7,11 +7,14 @@ import {
 import { useThemePreference, THEME_CHOICES } from '../lib/theme'
 import { LeaseTemplates } from './LeaseTemplates'
 import { InviteMember } from './InviteMember'
+import { fetchMileageRate, setMileageRate } from '../lib/expenses'
 
 type Props = {
   organizationId: string
   /** Admins invite staff; property managers can only invite tenants. */
   canInviteMembers: boolean
+  /** Organization-wide settings, like the mileage rate, are admin-only. */
+  isAdmin?: boolean
   onBack: () => void
 }
 
@@ -30,7 +33,7 @@ const ROLE_LABEL: Record<Membership['role'], string> = {
  * anything organization-wide that came after it. It is a hub now: the
  * templates are one entry in it rather than the whole of it.
  */
-export function Settings({ organizationId, canInviteMembers, onBack }: Props) {
+export function Settings({ organizationId, canInviteMembers, isAdmin = false, onBack }: Props) {
   const [showTemplates, setShowTemplates] = useState(false)
   const [inviting, setInviting] = useState(false)
   const [members, setMembers] = useState<Membership[] | null>(null)
@@ -140,6 +143,8 @@ export function Settings({ organizationId, canInviteMembers, onBack }: Props) {
           </div>
         </>
       )}
+
+      {isAdmin && <MileageRate organizationId={organizationId} />}
 
       <h3 style={{ marginTop: '2.5rem' }}>Documents</h3>
       <div className="card-list">
@@ -329,5 +334,61 @@ function TechnicianAccessEditor({
         <button className="link" onClick={() => { setDraft(null); setError(null) }}>Cancel</button>
       </div>
     </fieldset>
+  )
+}
+
+/**
+ * What a mile of repair-job driving costs. Without it, mileage is logged
+ * but counted as nothing in job totals and on the Expenses screen.
+ */
+function MileageRate({ organizationId }: { organizationId: string }) {
+  const [rate, setRate] = useState('')
+  const [saved, setSaved] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchMileageRate(organizationId)
+      .then((r) => { const v = r == null ? '' : String(r); setRate(v); setSaved(v) })
+      .catch((e) => setError(errorMessage(e)))
+  }, [organizationId])
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault()
+    setBusy(true); setError(null)
+    try {
+      await setMileageRate(organizationId, rate.trim() === '' ? null : Number(rate))
+      setSaved(rate)
+    } catch (err) {
+      setError(errorMessage(err))
+    }
+    setBusy(false)
+  }
+
+  return (
+    <>
+      <h3 style={{ marginTop: '2.5rem' }}>Mileage</h3>
+      <form onSubmit={save} className="card-list">
+        <div>
+          <div className="field">
+            <label htmlFor="mileage-rate">Cost per mile ($)</label>
+            <input id="mileage-rate" type="number" min="0" max="10" step="0.001"
+              inputMode="decimal" placeholder="e.g. 0.70"
+              value={rate} onChange={(e) => setRate(e.target.value)} />
+            {/* The IRS standard rate changes every year, so it is named
+                rather than filled in. */}
+            <span className="muted">
+              Turns miles logged on repair jobs into a cost. Most landlords use
+              the IRS standard mileage rate for the year. Leave blank to log
+              miles without costing them.
+            </span>
+          </div>
+          {error && <p className="error-text">{error}</p>}
+          <button className="primary" type="submit" disabled={busy || rate === saved}>
+            {busy ? 'Saving…' : rate === saved && saved !== null ? 'Saved' : 'Save'}
+          </button>
+        </div>
+      </form>
+    </>
   )
 }

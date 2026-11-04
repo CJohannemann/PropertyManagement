@@ -11,6 +11,7 @@ import { Upcoming } from '../Upcoming'
 import { RecentActivity } from '../RecentActivity'
 import { MaintenanceRequests } from '../MaintenanceRequests'
 import { Settings } from '../Settings'
+import { Expenses } from '../Expenses'
 
 type Property = PropertySummary & { units: { id: string }[] }
 
@@ -95,6 +96,10 @@ export function PropertyManagerDashboard({
         </div>
       </div>
     )
+  }
+
+  if (section === '/expenses') {
+    return <Expenses organizationId={organizationId} isAdmin={false} />
   }
 
   if (section === '/maintenance') {

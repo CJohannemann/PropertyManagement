@@ -16,6 +16,7 @@ export type Route =
   | '/reset-password'
   | '/dashboard'
   | '/rent'
+  | '/expenses'
   | '/maintenance'
   | '/properties'
   | '/settings'
@@ -26,13 +27,14 @@ export type Location =
 
 export const ROUTES: Route[] = [
   '/', '/login', '/signup', '/setup', '/accept-invite', '/reset-password',
-  '/dashboard', '/rent', '/maintenance', '/properties', '/settings',
+  '/dashboard', '/rent', '/expenses', '/maintenance', '/properties', '/settings',
 ]
 
 /** The screens inside the signed-in app shell, in nav order. */
 export const APP_SECTIONS: { route: Route; label: string }[] = [
   { route: '/dashboard', label: 'Home' },
   { route: '/rent', label: 'Rent' },
+  { route: '/expenses', label: 'Expenses' },
   { route: '/maintenance', label: 'Repairs' },
   { route: '/properties', label: 'Properties' },
 ]
@@ -48,7 +50,7 @@ export const TECH_SECTIONS: { route: Route; label: string }[] = [
 
 /** Screens that mean nothing signed out, and bounce to the sign-in page. */
 export const SIGNED_IN_ONLY: string[] = [
-  '/', '/dashboard', '/rent', '/maintenance', '/properties', '/settings',
+  '/', '/dashboard', '/rent', '/expenses', '/maintenance', '/properties', '/settings',
   '/setup', '/reset-password',
 ]
 

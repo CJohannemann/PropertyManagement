@@ -10,6 +10,7 @@ import { QuickActions } from '../QuickActions'
 import { Upcoming } from '../Upcoming'
 import { RecentActivity } from '../RecentActivity'
 import { Settings } from '../Settings'
+import { Expenses } from '../Expenses'
 import { MaintenanceRequests } from '../MaintenanceRequests'
 import { GettingPaid } from '../GettingPaid'
 
@@ -108,6 +109,10 @@ export function AdminDashboard({
     )
   }
 
+  if (section === '/expenses') {
+    return <Expenses organizationId={organizationId} isAdmin={true} />
+  }
+
   if (section === '/maintenance') {
     return <MaintenanceRequests organizationId={organizationId} memberId={memberId} />
   }
@@ -117,6 +122,7 @@ export function AdminDashboard({
       <Settings
         organizationId={organizationId}
         canInviteMembers
+        isAdmin
         onBack={() => navigate('/dashboard')}
       />
     )
