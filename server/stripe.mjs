@@ -9,25 +9,32 @@ export const stripe = new Stripe(config.stripe.secretKey)
 /**
  * How a landlord's connected account is configured.
  *
- * Written as controller properties rather than `type: 'express'`: Stripe
+ * Written as controller properties rather than `type: 'standard'`: Stripe
  * now treats the account types as legacy and tells new platforms not to
- * use them. These values reproduce Express behavior — Stripe-hosted
- * onboarding, Express dashboard — with one deliberate difference:
+ * use them. These values are the Standard preset — Stripe-hosted
+ * onboarding, and the landlord gets the full Stripe Dashboard for their
+ * own account.
  *
- *   losses.payments: 'stripe'
+ * Not the Express dashboard, which an earlier version asked for. Stripe
+ * refuses Express unless the platform collects the fees and is liable for
+ * negative balances ("When stripe_dashboard[type]=express, your platform
+ * must collect fees and be liable…"), and both of those are what this
+ * deliberately avoids:
  *
- * The Express preset sets that to 'application', which makes THIS platform
- * liable for a landlord's negative balance. A tenant can dispute an ACH
- * debit for up to 60 days after it settled; if the landlord has already
- * been paid out and spent it, that shortfall would land on us. Stripe
- * carries it instead.
+ *   losses.payments: 'stripe' — a tenant can dispute an ACH debit for up
+ *     to 60 days after it settled; if the landlord has already been paid
+ *     out and spent it, that shortfall lands on Stripe and the landlord,
+ *     not on this platform.
  *
- * fees.payer: 'account' — the landlord pays Stripe's processing fees out
- * of their own balance, so this platform never fronts money it then has to
- * bill back.
+ *   fees.payer: 'account' — the landlord pays Stripe's processing fees out
+ *     of their own balance, so this platform never fronts money it then
+ *     has to bill back.
+ *
+ * Both fit what rent is here: a direct charge, with the landlord as the
+ * merchant of record for their own rent.
  */
 export const CONNECT_CONTROLLER = {
-  stripe_dashboard: { type: 'express' },
+  stripe_dashboard: { type: 'full' },
   losses: { payments: 'stripe' },
   fees: { payer: 'account' },
   requirement_collection: 'stripe',
