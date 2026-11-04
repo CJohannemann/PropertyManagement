@@ -17,6 +17,11 @@ type Props = {
   onChanged: () => void
 }
 
+/** The choices in Log work, in the order a technician usually needs them. */
+const ENTRY_CHOICES: [JobEntry['entry_type'], string][] = [
+  ['material', 'Materials'], ['mileage', 'Mileage'], ['labor', 'Time'], ['note', 'Note'],
+]
+
 const ENTRY_LABEL: Record<JobEntry['entry_type'], string> = {
   labor: 'Labor', mileage: 'Mileage', material: 'Materials', note: 'Note',
 }
@@ -231,15 +236,21 @@ function AddEntry({
     <form onSubmit={submit} className="card-list" style={{ marginTop: '1rem' }}>
       <div>
         <h3 style={{ marginTop: 0 }}>Log work</h3>
+        {/* All four kinds side by side, not in a dropdown: behind a
+            select reading "Materials bought", mileage and time were easy
+            to miss entirely — the form looked like it only took receipts. */}
         <div className="field">
-          <label htmlFor="e-type">What are you recording?</label>
-          <select id="e-type" value={type}
-            onChange={(e) => setType(e.target.value as JobEntry['entry_type'])}>
-            <option value="material">Materials bought</option>
-            <option value="mileage">Mileage</option>
-            <option value="labor">Time worked</option>
-            <option value="note">A note</option>
-          </select>
+          <span className="muted">What are you recording?</span>
+          <div className="seg" role="radiogroup" aria-label="What are you recording?">
+            {ENTRY_CHOICES.map(([value, label]) => (
+              <button key={value} type="button" role="radio"
+                aria-checked={type === value}
+                className={type === value ? 'seg-item is-current' : 'seg-item'}
+                onClick={() => setType(value)}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {type === 'material' && (
