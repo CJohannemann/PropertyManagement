@@ -75,6 +75,13 @@ select assert(
     where organization_id = :'org' and kind = 'payment_received') = 1,
   'money arriving raises a notification');
 
+-- Says who paid and how, not "1200.00 by check" (035).
+select assert(
+  (select body from notifications
+    where organization_id = :'org' and kind = 'payment_received')
+    like '% paid $1,200.00 by check · %',
+  'the payment alert names the payer, amount and method');
+
 -- Stripe redelivers webhooks for days. The trigger fires on the transition
 -- into succeeded, not on the state, or one payment would produce a stream
 -- of identical alerts.
