@@ -1,6 +1,6 @@
 import { errorMessage } from '../../lib/supabase'
 import { useEffect, useState } from 'react'
-import { fetchJobs, type Job } from '../../lib/maintenance'
+import { fetchJobs, JOB_STATUS_LABEL, friendlyDate, type Job } from '../../lib/maintenance'
 import { JobDetail } from '../JobDetail'
 import { TechnicianProperties } from '../TechnicianProperties'
 import type { Route } from '../../lib/route'
@@ -107,11 +107,13 @@ function JobRow({ job, onOpen }: { job: Job; onOpen: () => void }) {
         <strong>
           {job.properties?.name}{job.units?.label ? ` · ${job.units.label}` : ''}
         </strong>
-        <span className="muted" style={{ margin: 0 }}>{job.status}</span>
+        <span className="muted" style={{ margin: 0 }}>
+          {JOB_STATUS_LABEL[job.status] ?? job.status}
+        </span>
       </div>
       {job.notes && <div className="muted">{job.notes}</div>}
       {job.scheduled_date && (
-        <div className="muted">Scheduled {job.scheduled_date}</div>
+        <div className="muted">Booked for {friendlyDate(job.scheduled_date)}</div>
       )}
     </div>
   )

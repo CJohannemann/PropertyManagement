@@ -2,6 +2,7 @@ import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import {
   fetchJobEntries, addJobEntry, fetchJobTotals, setJobStatus, setCompletionNotes,
+  JOB_STATUS_LABEL, friendlyDate,
   uploadReceipt, listReceipts, receiptUrl,
   type Job, type JobEntry, type JobTotals,
 } from '../lib/maintenance'
@@ -68,9 +69,9 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
         {job.properties?.name}{job.units?.label ? ` · ${job.units.label}` : ''}
       </h2>
       <p className="muted" style={{ marginTop: 0 }}>
-        {job.status}
-        {job.scheduled_date ? ` · scheduled ${job.scheduled_date}` : ''}
-        {job.completed_date ? ` · completed ${job.completed_date}` : ''}
+        {JOB_STATUS_LABEL[job.status] ?? job.status}
+        {job.completed_date ? ` · finished ${friendlyDate(job.completed_date)}`
+          : job.scheduled_date ? ` · booked for ${friendlyDate(job.scheduled_date)}` : ''}
       </p>
       {job.notes && <p>{job.notes}</p>}
       {job.vendors && (
@@ -177,7 +178,7 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
                     ? 'Invoice' : ENTRY_LABEL[e.entry_type]}
                 </strong>
                 <span className="muted" style={{ margin: 0 }}>
-                  {e.created_at.slice(0, 10)}
+                  {friendlyDate(e.created_at)}
                 </span>
               </div>
               {e.description && <div>{e.description}</div>}

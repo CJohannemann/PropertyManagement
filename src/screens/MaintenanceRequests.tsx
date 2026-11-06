@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, errorMessage } from '../lib/supabase'
 import {
-  fetchRequests, createJobFromRequest, fetchJobs,
+  fetchRequests, createJobFromRequest, fetchJobs, JOB_STATUS_LABEL,
   type MaintenanceRequest, type Job,
 } from '../lib/maintenance'
 import { fetchVendors, createVendor, vendorLabel, type Vendor } from '../lib/finance'
@@ -148,7 +148,9 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
                 <strong>
                   {j.properties?.name}{j.units?.label ? ` · ${j.units.label}` : ''}
                 </strong>
-                <span className="muted" style={{ margin: 0 }}>{j.status}</span>
+                <span className="muted" style={{ margin: 0 }}>
+                  {JOB_STATUS_LABEL[j.status] ?? j.status}
+                </span>
               </div>
               {j.notes && <div className="muted">{j.notes}</div>}
               {j.vendors ? (

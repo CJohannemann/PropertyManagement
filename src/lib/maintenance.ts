@@ -58,6 +58,41 @@ export const REQUEST_CATEGORIES = [
   'plumbing', 'electrical', 'appliance', 'hvac', 'pest', 'structural', 'other',
 ] as const
 
+/** How a job's status reads on screen — plain words, not the stored code. */
+export const JOB_STATUS_LABEL: Record<Job['status'], string> = {
+  offered: 'Waiting to hear back',
+  scheduled: 'Booked',
+  in_progress: 'Underway',
+  completed: 'Done',
+  canceled: 'Canceled',
+  declined: 'Declined',
+}
+
+/** The same for a tenant's request, told from their side. */
+export const REQUEST_STATUS_LABEL: Record<MaintenanceRequest['status'], string> = {
+  open: 'Received',
+  assigned: 'Someone\'s booked',
+  in_progress: 'Underway',
+  completed: 'Done',
+  closed: 'Closed',
+}
+
+/**
+ * "Nov 6", or "Nov 6, 2025" outside this year, from a YYYY-MM-DD date or
+ * a timestamp. A bare date is read as a local calendar day: new Date() on
+ * "2026-11-06" would take it as midnight UTC, which is the evening before
+ * anywhere west of London.
+ */
+export function friendlyDate(value: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  return d.toLocaleDateString(undefined, {
+    month: 'short', day: 'numeric',
+    ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }),
+  })
+}
+
 export async function fetchRequests(): Promise<MaintenanceRequest[]> {
   if (!supabase) return []
   const { data, error } = await supabase
