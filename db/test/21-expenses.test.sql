@@ -6,6 +6,12 @@
 -- and that expense_lines() adds up entered expenses and job costs
 -- without counting anything twice.
 
+-- The runner's `truncate auth.users cascade` between files takes the
+-- buckets with it (storage.buckets.owner references auth.users) — see
+-- 15-file-access.test.sql. Put this one back as 036 would.
+insert into storage.buckets (id, name) values ('expense-receipts', 'expense-receipts')
+on conflict (id) do nothing;
+
 insert into auth.users (id, email) values
   ('e1111111-1111-1111-1111-111111111111', 'owner@example.com'),
   ('e2222222-2222-2222-2222-222222222222', 'other@example.com'),

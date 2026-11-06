@@ -18,6 +18,12 @@ export type Job = {
   request_id: string | null
   assigned_technician_id: string | null
   /**
+   * An outside company hired for the job (039) — a vendor with no login.
+   * A job has a technician or a vendor, never both. Nothing is sent to
+   * the vendor; the office arranges the visit itself.
+   */
+  vendor_id: string | null
+  /**
    * 'offered' and 'declined' are history only: 027 made assigning a job
    * an offer the technician had to accept, and 034 took that step out —
    * an assigned job is 'scheduled' and theirs. Old declined jobs keep
@@ -28,7 +34,11 @@ export type Job = {
   scheduled_date: string | null
   completed_date: string | null
   notes: string | null
+  /** What was done, written by whoever closes the job out. Internal. */
+  completion_notes: string | null
   properties?: { name: string } | null
+  /** Embedded for the office; null for a technician, who cannot read vendors. */
+  vendors?: { name: string; business_name: string | null; phone: string | null; email: string | null } | null
   units?: { label: string } | null
 }
 
@@ -82,21 +92,26 @@ export async function fetchJobs(): Promise<Job[]> {
   if (!supabase) return []
   const { data, error } = await supabase
     .from('maintenance_jobs')
-    .select('id, property_id, unit_id, request_id, assigned_technician_id, status, scheduled_date, completed_date, notes, properties(name), units(label)')
+    .select('id, property_id, unit_id, request_id, assigned_technician_id, vendor_id, status, scheduled_date, completed_date, notes, completion_notes, properties(name), units(label), vendors(name, business_name, phone, email)')
     .order('scheduled_date', { ascending: true, nullsFirst: false })
   if (error) throw error
   return data as unknown as Job[]
 }
 
-/** Wraps create_job_from_request(), which also marks the request assigned. */
+/**
+ * Wraps create_job_from_request(), which also marks the request assigned.
+ * Pass a technician or a vendor, or neither to decide later — not both.
+ */
 export async function createJobFromRequest(
   requestId: string, technicianId: string | null, scheduledDate: string | null,
+  vendorId: string | null = null,
 ): Promise<string> {
   if (!supabase) throw new Error('Supabase not configured')
   const { data, error } = await supabase.rpc('create_job_from_request', {
     request: requestId,
     technician: technicianId,
     when_scheduled: scheduledDate,
+    vendor: vendorId,
   })
   if (error) throw error
   return data as string
@@ -109,6 +124,14 @@ export async function setJobStatus(jobId: string, status: Job['status']): Promis
   // later without reconstructing it from entry timestamps.
   if (status === 'completed') patch.completed_date = new Date().toISOString().slice(0, 10)
   const { error } = await supabase.from('maintenance_jobs').update(patch).eq('id', jobId)
+  if (error) throw error
+}
+
+/** Saves what was done on the job. An empty string clears it. */
+export async function setCompletionNotes(jobId: string, notes: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { error } = await supabase.from('maintenance_jobs')
+    .update({ completion_notes: notes.trim() || null }).eq('id', jobId)
   if (error) throw error
 }
 

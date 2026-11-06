@@ -1,11 +1,12 @@
 import { errorMessage } from '../lib/supabase'
 import { useEffect, useState } from 'react'
 import {
-  fetchJobEntries, addJobEntry, fetchJobTotals, setJobStatus,
+  fetchJobEntries, addJobEntry, fetchJobTotals, setJobStatus, setCompletionNotes,
   uploadReceipt, listReceipts, receiptUrl,
   type Job, type JobEntry, type JobTotals,
 } from '../lib/maintenance'
 import { money } from '../lib/charges'
+import { vendorLabel } from '../lib/finance'
 import { EquipmentList } from './EquipmentList'
 
 type Props = {
@@ -22,11 +23,22 @@ const ENTRY_CHOICES: [JobEntry['entry_type'], string][] = [
   ['material', 'Materials'], ['mileage', 'Mileage'], ['labor', 'Time'], ['note', 'Note'],
 ]
 
+/**
+ * On a job an outside company was hired for, the office is recording
+ * their bill, not anyone's time or driving. An invoice is stored as a
+ * labor entry with a cost and no hours (039).
+ */
+const VENDOR_ENTRY_CHOICES: [JobEntry['entry_type'], string][] = [
+  ['labor', 'Invoice'], ['material', 'Materials'], ['note', 'Note'],
+]
+
 const ENTRY_LABEL: Record<JobEntry['entry_type'], string> = {
   labor: 'Labor', mileage: 'Mileage', material: 'Materials', note: 'Note',
 }
 
 export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) {
+  const hired = job.vendor_id != null
+  const [completing, setCompleting] = useState(false)
   const [entries, setEntries] = useState<JobEntry[] | null>(null)
   const [totals, setTotals] = useState<JobTotals | null>(null)
   const [receipts, setReceipts] = useState<string[]>([])
@@ -61,12 +73,23 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
         {job.completed_date ? ` · completed ${job.completed_date}` : ''}
       </p>
       {job.notes && <p>{job.notes}</p>}
+      {job.vendors && (
+        <p>
+          Hired: <strong>{vendorLabel(job.vendors)}</strong>
+          {job.vendors.phone && (
+            <> · <a href={`tel:${job.vendors.phone}`}>{job.vendors.phone}</a></>
+          )}
+          {job.vendors.email && (
+            <> · <a href={`mailto:${job.vendors.email}`}>{job.vendors.email}</a></>
+          )}
+        </p>
+      )}
 
       {error && <p className="error-text">{error}</p>}
 
       {/* Assigned jobs are simply the technician's (034) — no accept or
           decline step, so the work controls are there from the start. */}
-      {canEdit && job.status !== 'completed' && job.status !== 'declined'
+      {canEdit && !completing && job.status !== 'completed' && job.status !== 'declined'
         && job.status !== 'canceled' && (
         <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
           {job.status !== 'in_progress' && (
@@ -74,10 +97,30 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
               await setJobStatus(job.id, 'in_progress'); onChanged()
             }}>Start work</button>
           )}
-          <button className="link" onClick={async () => {
-            await setJobStatus(job.id, 'completed'); onChanged()
-          }}>Mark complete</button>
+          <button className="link" onClick={() => setCompleting(true)}>
+            Mark complete
+          </button>
         </div>
+      )}
+
+      {/* Finishing asks what was done, while it is fresh. Optional: a
+          dripping tap needs no write-up. */}
+      {completing && (
+        <WorkDoneForm
+          initial={job.completion_notes ?? ''}
+          submitLabel="Mark complete"
+          onCancel={() => setCompleting(false)}
+          onSave={async (notes) => {
+            await setCompletionNotes(job.id, notes)
+            await setJobStatus(job.id, 'completed')
+            setCompleting(false)
+            onChanged()
+          }}
+        />
+      )}
+
+      {!completing && (canEdit || job.completion_notes) && (
+        <WorkDone job={job} canEdit={canEdit} onChanged={onChanged} />
       )}
 
       {/* What is installed where the work is, so the make and model are
@@ -89,7 +132,15 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
       <EquipmentList propertyId={job.property_id} unitId={job.unit_id}
         memberId={memberId} canDelete={false} readOnly={!canEdit} />
 
-      {totals && (
+      {totals && hired && (
+        <div className="card-list">
+          <div>
+            <strong>{money(Number(totals.total_cost))}</strong> spent
+            <div className="muted">The company's invoice plus any materials.</div>
+          </div>
+        </div>
+      )}
+      {totals && !hired && (
         <div className="card-list">
           <div>
             <strong>{money(Number(totals.total_cost))}</strong> spent
@@ -112,7 +163,7 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
         </div>
       )}
 
-      {canEdit && <AddEntry jobId={job.id} memberId={memberId} onAdded={load} />}
+      {canEdit && <AddEntry jobId={job.id} memberId={memberId} hired={hired} onAdded={load} />}
 
       <h3 style={{ marginTop: '2rem' }}>Log</h3>
       {entries === null ? <p className="muted">Loading…</p>
@@ -121,7 +172,10 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
           {entries.map((e) => (
             <div key={e.id}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <strong>{ENTRY_LABEL[e.entry_type]}</strong>
+                <strong>
+                  {e.entry_type === 'labor' && (hired || e.hours == null)
+                    ? 'Invoice' : ENTRY_LABEL[e.entry_type]}
+                </strong>
                 <span className="muted" style={{ margin: 0 }}>
                   {e.created_at.slice(0, 10)}
                 </span>
@@ -161,6 +215,82 @@ export function JobDetail({ job, memberId, canEdit, onBack, onChanged }: Props) 
   )
 }
 
+/** What was done: read by anyone who opens the job, edited by the office. */
+function WorkDone({
+  job, canEdit, onChanged,
+}: { job: Job; canEdit: boolean; onChanged: () => void }) {
+  const [editing, setEditing] = useState(false)
+  if (editing) {
+    return (
+      <WorkDoneForm
+        initial={job.completion_notes ?? ''}
+        submitLabel="Save"
+        onCancel={() => setEditing(false)}
+        onSave={async (notes) => {
+          await setCompletionNotes(job.id, notes)
+          setEditing(false)
+          onChanged()
+        }}
+      />
+    )
+  }
+  return (
+    <div style={{ marginBottom: '1rem' }}>
+      <h3 style={{ marginBottom: '0.25rem' }}>What was done</h3>
+      {job.completion_notes
+        ? <p style={{ marginTop: 0, whiteSpace: 'pre-wrap' }}>{job.completion_notes}</p>
+        : <p className="empty-state" style={{ marginTop: 0 }}>Nothing written yet.</p>}
+      {canEdit && (
+        <button className="link" onClick={() => setEditing(true)}>
+          {job.completion_notes ? 'Edit' : 'Add notes'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function WorkDoneForm({
+  initial, submitLabel, onSave, onCancel,
+}: {
+  initial: string
+  submitLabel: string
+  onSave: (notes: string) => Promise<void>
+  onCancel: () => void
+}) {
+  const [notes, setNotes] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <form className="card-list" style={{ marginBottom: '1rem' }} onSubmit={async (e) => {
+      e.preventDefault()
+      setBusy(true); setError(null)
+      try {
+        await onSave(notes)
+      } catch (err) {
+        setError(errorMessage(err))
+        setBusy(false)
+      }
+    }}>
+      <div>
+        <div className="field">
+          <label htmlFor="work-done">What was done (optional)</label>
+          <textarea id="work-done" rows={4} value={notes}
+            placeholder="Treated kitchen and basement. Follow-up visit in 30 days."
+            onChange={(e) => setNotes(e.target.value)} />
+          <span className="muted">For your records — the tenant doesn't see this.</span>
+        </div>
+        {error && <p className="error-text">{error}</p>}
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <button className="primary" type="submit" disabled={busy}>
+            {busy ? 'Saving…' : submitLabel}
+          </button>
+          <button className="link" type="button" onClick={onCancel}>Cancel</button>
+        </div>
+      </div>
+    </form>
+  )
+}
+
 function ReceiptRow({ path }: { path: string }) {
   const [url, setUrl] = useState<string | null>(null)
   // Signed on demand rather than eagerly: the bucket is private, links
@@ -179,9 +309,12 @@ function ReceiptRow({ path }: { path: string }) {
 }
 
 function AddEntry({
-  jobId, memberId, onAdded,
-}: { jobId: string; memberId: string; onAdded: () => void }) {
-  const [type, setType] = useState<JobEntry['entry_type']>('material')
+  jobId, memberId, hired, onAdded,
+}: { jobId: string; memberId: string; hired: boolean; onAdded: () => void }) {
+  const choices = hired ? VENDOR_ENTRY_CHOICES : ENTRY_CHOICES
+  const [type, setType] = useState<JobEntry['entry_type']>(choices[0][0])
+  // A vendor's invoice: labor with a cost and no hours.
+  const invoice = hired && type === 'labor'
   const [description, setDescription] = useState('')
   const [hours, setHours] = useState('')
   const [miles, setMiles] = useState('')
@@ -216,7 +349,7 @@ function AddEntry({
         description: description.trim() || null,
         // Only the figure this entry type is for is sent; the database
         // rejects an entry that carries nothing measurable.
-        hours: type === 'labor' ? num(hours) : null,
+        hours: type === 'labor' && !invoice ? num(hours) : null,
         miles: type === 'mileage' ? num(miles) : null,
         // Both materials and labor can carry a cost now; the database has
         // always allowed it and job_totals has always counted it.
@@ -235,14 +368,14 @@ function AddEntry({
   return (
     <form onSubmit={submit} className="card-list" style={{ marginTop: '1rem' }}>
       <div>
-        <h3 style={{ marginTop: 0 }}>Log work</h3>
+        <h3 style={{ marginTop: 0 }}>{hired ? 'Record a cost' : 'Log work'}</h3>
         {/* All four kinds side by side, not in a dropdown: behind a
             select reading "Materials bought", mileage and time were easy
             to miss entirely — the form looked like it only took receipts. */}
         <div className="field">
           <span className="muted">What are you recording?</span>
           <div className="seg" role="radiogroup" aria-label="What are you recording?">
-            {ENTRY_CHOICES.map(([value, label]) => (
+            {choices.map(([value, label]) => (
               <button key={value} type="button" role="radio"
                 aria-checked={type === value}
                 className={type === value ? 'seg-item is-current' : 'seg-item'}
@@ -274,7 +407,14 @@ function AddEntry({
               value={miles} onChange={(e) => setMiles(e.target.value)} />
           </div>
         )}
-        {type === 'labor' && (
+        {invoice && (
+          <div className="field">
+            <label htmlFor="e-invoice">Invoice amount ($)</label>
+            <input id="e-invoice" type="number" min="0" step="0.01" required
+              value={cost} onChange={(e) => setCost(e.target.value)} />
+          </div>
+        )}
+        {type === 'labor' && !invoice && (
           <>
             <div className="field">
               <label htmlFor="e-hours">Hours</label>
@@ -302,7 +442,8 @@ function AddEntry({
         {(type === 'material' || type === 'labor') && (
           <div className="field">
             <label htmlFor="e-receipt">
-              {type === 'material' ? 'Receipt photo' : 'Invoice or receipt (optional)'}
+              {type === 'material' ? 'Receipt photo'
+                : invoice ? 'Invoice photo or PDF (optional)' : 'Invoice or receipt (optional)'}
             </label>
             <input
               key={receiptKey}

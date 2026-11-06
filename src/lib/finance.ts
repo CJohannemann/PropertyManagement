@@ -90,6 +90,22 @@ export async function saveVendor(
   if (error) throw error
 }
 
+/**
+ * Saves a vendor from just a name and phone number, for hiring one on the
+ * spot from a repair request. The rest — W-9, tax id — is filled in later
+ * under Finances → Vendors. Returns the new vendor's id.
+ */
+export async function createVendor(
+  organizationId: string, name: string, phone: string | null,
+): Promise<string> {
+  if (!supabase) throw new Error('Supabase not configured')
+  const { data, error } = await supabase.from('vendors')
+    .insert({ organization_id: organizationId, name, phone })
+    .select('id').single()
+  if (error) throw error
+  return (data as { id: string }).id
+}
+
 export async function deleteVendor(id: string): Promise<void> {
   if (!supabase) throw new Error('Supabase not configured')
   const { error } = await supabase.from('vendors').delete().eq('id', id)

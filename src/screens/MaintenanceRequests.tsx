@@ -4,6 +4,7 @@ import {
   fetchRequests, createJobFromRequest, fetchJobs,
   type MaintenanceRequest, type Job,
 } from '../lib/maintenance'
+import { fetchVendors, createVendor, vendorLabel, type Vendor } from '../lib/finance'
 import { JobDetail } from './JobDetail'
 import { RequestPhotos } from './RequestPhotos'
 
@@ -19,6 +20,7 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
   const [requests, setRequests] = useState<MaintenanceRequest[] | null>(null)
   const [jobs, setJobs] = useState<Job[]>([])
   const [technicians, setTechnicians] = useState<Technician[]>([])
+  const [vendors, setVendors] = useState<Vendor[]>([])
   const [selectedJob, setSelectedJob] = useState<Job | null>(null)
   const [assigning, setAssigning] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -39,6 +41,7 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
         .eq('role', 'technician')
         .eq('status', 'active')
       setTechnicians((data ?? []) as Technician[])
+      setVendors(await fetchVendors(organizationId))
     } catch (e) {
       setError(errorMessage(e))
     }
@@ -119,13 +122,15 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
             {assigning === r.id ? (
               <AssignForm
                 requestId={r.id}
+                organizationId={organizationId}
                 technicians={technicians}
+                vendors={vendors}
                 onDone={() => { setAssigning(null); load() }}
                 onError={setError}
               />
             ) : (
               <button className="link" onClick={() => setAssigning(r.id)}>
-                Assign to a technician
+                Assign or hire someone
               </button>
             )}
           </div>
@@ -146,7 +151,9 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
                 <span className="muted" style={{ margin: 0 }}>{j.status}</span>
               </div>
               {j.notes && <div className="muted">{j.notes}</div>}
-              {!j.assigned_technician_id && (
+              {j.vendors ? (
+                <div className="muted">Hired: {vendorLabel(j.vendors)}</div>
+              ) : !j.assigned_technician_id && (
                 <div className="muted">Not assigned to anyone yet</div>
               )}
             </div>
@@ -157,15 +164,30 @@ export function MaintenanceRequests({ organizationId, memberId }: Props) {
   )
 }
 
+/**
+ * Who does the work: one of our technicians, who gets the job in their
+ * app, or an outside company, who has no login and is only recorded —
+ * the office calls them. Either way the tenant hears someone is booked in.
+ */
 function AssignForm({
-  requestId, technicians, onDone, onError,
+  requestId, organizationId, technicians, vendors, onDone, onError,
 }: {
   requestId: string
+  organizationId: string
   technicians: Technician[]
+  vendors: Vendor[]
   onDone: () => void
   onError: (m: string) => void
 }) {
+  const [who, setWho] = useState<'technician' | 'vendor'>('technician')
   const [tech, setTech] = useState('')
+  // '' = not chosen, 'new' = typing in a company not saved yet.
+  const [vendor, setVendor] = useState(vendors.length === 0 ? 'new' : '')
+  const [newName, setNewName] = useState('')
+  const [newPhone, setNewPhone] = useState('')
+  // Kept once saved, so a retry after the job itself fails does not save
+  // the same company twice.
+  const [createdVendor, setCreatedVendor] = useState<string | null>(null)
   const [date, setDate] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -176,7 +198,17 @@ function AssignForm({
         e.preventDefault()
         setBusy(true)
         try {
-          await createJobFromRequest(requestId, tech || null, date || null)
+          if (who === 'vendor') {
+            let vendorId = vendor
+            if (vendor === 'new') {
+              vendorId = createdVendor
+                ?? await createVendor(organizationId, newName.trim(), newPhone.trim() || null)
+              setCreatedVendor(vendorId)
+            }
+            await createJobFromRequest(requestId, null, date || null, vendorId)
+          } else {
+            await createJobFromRequest(requestId, tech || null, date || null)
+          }
           onDone()
         } catch (err) {
           // The database refuses a technician who has no access to the
@@ -187,22 +219,79 @@ function AssignForm({
       }}
     >
       <div className="field">
-        <label htmlFor={`tech-${requestId}`}>Technician</label>
-        <select id={`tech-${requestId}`} value={tech} onChange={(e) => setTech(e.target.value)}>
-          <option value="">Decide later</option>
-          {technicians.map((t) => (
-            <option key={t.id} value={t.id}>{t.full_name ?? 'Unnamed technician'}</option>
-          ))}
-        </select>
-        {technicians.length === 0 && (
-          <span className="muted">
-            No technicians yet — invite one, or leave this unassigned and
-            handle it yourself.
-          </span>
-        )}
+        <span className="muted">Who is doing the work?</span>
+        <div className="seg" role="radiogroup" aria-label="Who is doing the work?">
+          {([['technician', 'Our technician'], ['vendor', 'Outside company']] as const)
+            .map(([value, label]) => (
+              <button key={value} type="button" role="radio"
+                aria-checked={who === value}
+                className={who === value ? 'seg-item is-current' : 'seg-item'}
+                onClick={() => setWho(value)}>
+                {label}
+              </button>
+            ))}
+        </div>
       </div>
+
+      {who === 'technician' ? (
+        <div className="field">
+          <label htmlFor={`tech-${requestId}`}>Technician</label>
+          <select id={`tech-${requestId}`} value={tech} onChange={(e) => setTech(e.target.value)}>
+            <option value="">Decide later</option>
+            {technicians.map((t) => (
+              <option key={t.id} value={t.id}>{t.full_name ?? 'Unnamed technician'}</option>
+            ))}
+          </select>
+          {technicians.length === 0 && (
+            <span className="muted">
+              No technicians yet — invite one, or leave this unassigned and
+              handle it yourself.
+            </span>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="field">
+            <label htmlFor={`vendor-${requestId}`}>Company</label>
+            <select id={`vendor-${requestId}`} value={vendor} required
+              onChange={(e) => setVendor(e.target.value)}>
+              <option value="" disabled>Choose a company</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>{vendorLabel(v)}</option>
+              ))}
+              <option value="new">Someone new…</option>
+            </select>
+            {/* Said plainly, since "assign" elsewhere on this screen
+                means handing someone the job in their app. */}
+            <span className="muted">
+              They aren't sent anything — call them to book the visit.
+            </span>
+          </div>
+          {vendor === 'new' && (
+            <>
+              <div className="field">
+                <label htmlFor={`vname-${requestId}`}>Company name</label>
+                <input id={`vname-${requestId}`} type="text" required
+                  placeholder="ABC Pest Control"
+                  value={newName} onChange={(e) => setNewName(e.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor={`vphone-${requestId}`}>Phone (optional)</label>
+                <input id={`vphone-${requestId}`} type="tel"
+                  value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
+                <span className="muted">
+                  Saved to Finances → Vendors, where you can add their W-9 later.
+                </span>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
       <div className="field">
-        <label htmlFor={`date-${requestId}`}>Scheduled for</label>
+        <label htmlFor={`date-${requestId}`}>
+          {who === 'vendor' ? 'Visit date' : 'Scheduled for'}
+        </label>
         <input id={`date-${requestId}`} type="date" value={date}
           onChange={(e) => setDate(e.target.value)} />
       </div>

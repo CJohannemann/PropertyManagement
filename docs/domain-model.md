@@ -202,7 +202,9 @@ checks it before you sign a landlord there.
 | View lease & rent-status for all tenants | ✅ | ✅ | ❌ | own only |
 | Message tenants | ✅ | ✅ | ❌ | own PM only |
 | Create/assign maintenance jobs | ✅ | ✅ | ❌ | ❌ |
-| Log job work (labor/mileage/materials/receipts) | ✅ | view only | ✅ (own jobs) | ❌ |
+| Hire an outside vendor for a job (no login for the vendor) | ✅ | ✅ | ❌ | ❌ |
+| Log job work (labor/mileage/materials/invoices/receipts) | ✅ | ✅ | ✅ (own jobs) | ❌ |
+| Write what was done on a job | ✅ | ✅ | ✅ (own jobs) | ❌ |
 | Submit maintenance request | ❌ | on behalf of tenant | ❌ | ✅ |
 | Make rent payment | ❌ | ❌ | ❌ | ✅ |
 | View own lease/balance | — | — | — | ✅ |
@@ -217,6 +219,13 @@ checks it before you sign a landlord there.
 5. Late fees are configurable per lease — auto-apply toggle, off by
    default (matches TurboTenant behavior), Property Manager can apply
    manually when off.
+6. (2026-11-06) Property Manager runs repair jobs end to end, including
+   costs and receipts — the owner (Admin) hires the PM to handle the
+   day-to-day. Admin-only: properties, staff, selling, closing a tax year,
+   deleting a stored receipt file.
+7. (2026-11-06) Outside companies (exterminators etc.) never get a login.
+   A job records the vendor hired (`maintenance_jobs.vendor_id`); the
+   office contacts them. A job has a technician or a vendor, not both.
 
 ## Not modeled yet (deliberately deferred)
 

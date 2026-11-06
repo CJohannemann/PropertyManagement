@@ -25,7 +25,9 @@ function TechnicianJobs({ memberId }: { memberId: string }) {
 
   async function load() {
     try {
-      const rows = await fetchJobs()
+      // A job an outside company was hired for is not theirs to work,
+      // though they can read it on a property they cover.
+      const rows = (await fetchJobs()).filter((j) => j.vendor_id == null)
       setJobs(rows)
       // Keeps the open job's own status/date current after an edit,
       // instead of showing a stale copy until you navigate away.
